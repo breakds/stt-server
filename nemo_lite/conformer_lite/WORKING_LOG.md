@@ -361,4 +361,18 @@ encoder.layers.0.feed_forward1.linear1.weight → layers.0.ffn1.linear1.weight
   - Swish/SiLU activation
 - [x] Documented weight mapping in WORKING_LOG.md
 
+### 2024-12-28: Feed-Forward Module Complete
+- [x] Implemented `feed_forward.py` with `FeedForwardModule` class
+- [x] Created unit tests in `tests/test_feed_forward.py` (10 tests passing)
+- [x] Simple structure: Linear → Swish → Dropout → Linear
+
+### 2024-12-28: Conformer Block Complete
+- [x] Implemented `conformer_block.py` with `ConformerBlock` class
+- [x] Created unit tests in `tests/test_conformer_block.py` (11 tests passing)
+- [x] Key implementation details:
+  - Macaron-style: FFN1 → Attention → Conv → FFN2 → LayerNorm
+  - FFN residual scaling factor = 0.5
+  - Pre-norm LayerNorm before each sub-module
+  - Separate dropout wrapping each sub-module output
+
 (To be updated as implementation progresses)
