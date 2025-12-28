@@ -35,6 +35,7 @@
   fiddle,
   nv-one-logger-core,
   nv-one-logger-training-telemetry,
+  nv-one-logger-pytorch-lightning-integration,
   # Common dependencies (requirements_common.txt)
   einops,
   pandas,
@@ -107,6 +108,7 @@ buildPythonPackage rec {
     fiddle
     nv-one-logger-core
     nv-one-logger-training-telemetry
+    nv-one-logger-pytorch-lightning-integration
     # Common (requirements_common.txt)
     einops
     pandas
@@ -157,8 +159,6 @@ buildPythonPackage rec {
     "whisper-normalizer"
     # Common deps not in nixpkgs
     "mediapy"
-    # NVIDIA internal packages (not yet packaged)
-    "nv-one-logger-pytorch-lightning-integration"
     # CUDA-specific (handled by torch)
     "numba-cuda"
   ];

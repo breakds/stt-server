@@ -14,6 +14,7 @@ in {
           fiddle = py-final.callPackage ./pkgs/fiddle {};
           nv-one-logger-core = py-final.callPackage ./pkgs/nv-one-logger-core {};
           nv-one-logger-training-telemetry = py-final.callPackage ./pkgs/nv-one-logger-training-telemetry {};
+          nv-one-logger-pytorch-lightning-integration = py-final.callPackage ./pkgs/nv-one-logger-pytorch-lightning-integration {};
           nemo-toolkit = py-final.callPackage ./pkgs/nemo-toolkit {};
         })
       ];
