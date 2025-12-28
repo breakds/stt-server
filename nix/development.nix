@@ -12,6 +12,7 @@ in {
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
           fiddle = py-final.callPackage ./pkgs/fiddle {};
+          nv-one-logger-core = py-final.callPackage ./pkgs/nv-one-logger-core {};
           nemo-toolkit = py-final.callPackage ./pkgs/nemo-toolkit {};
         })
       ];
@@ -55,7 +56,7 @@ in {
     };
 
     packages = {
-      inherit (pkgs-dev.python3Packages) nemo-toolkit;
+      inherit (pkgs-dev.python3Packages) nemo-toolkit nv-one-logger-core fiddle;
     };
   };
 }
