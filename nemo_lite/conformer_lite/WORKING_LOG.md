@@ -287,6 +287,25 @@ Each Conformer layer has a self-attention module with the following weights:
 
 **Note**: `linear_pos` has NO bias (critical for weight loading).
 
+### Convolution Module (`conv_module`)
+
+Each Conformer layer has a convolution module with the following weights:
+
+| NeMo weight name | Our weight name |
+|-----------------|-----------------|
+| `encoder.layers.{i}.conv_module.pointwise_conv1.weight` | `layers.{i}.conv_module.pointwise_conv1.weight` |
+| `encoder.layers.{i}.conv_module.pointwise_conv1.bias` | `layers.{i}.conv_module.pointwise_conv1.bias` |
+| `encoder.layers.{i}.conv_module.depthwise_conv.weight` | `layers.{i}.conv_module.depthwise_conv.weight` |
+| `encoder.layers.{i}.conv_module.depthwise_conv.bias` | `layers.{i}.conv_module.depthwise_conv.bias` |
+| `encoder.layers.{i}.conv_module.batch_norm.weight` | `layers.{i}.conv_module.batch_norm.weight` |
+| `encoder.layers.{i}.conv_module.batch_norm.bias` | `layers.{i}.conv_module.batch_norm.bias` |
+| `encoder.layers.{i}.conv_module.batch_norm.running_mean` | `layers.{i}.conv_module.batch_norm.running_mean` |
+| `encoder.layers.{i}.conv_module.batch_norm.running_var` | `layers.{i}.conv_module.batch_norm.running_var` |
+| `encoder.layers.{i}.conv_module.pointwise_conv2.weight` | `layers.{i}.conv_module.pointwise_conv2.weight` |
+| `encoder.layers.{i}.conv_module.pointwise_conv2.bias` | `layers.{i}.conv_module.pointwise_conv2.bias` |
+
+**Note**: BatchNorm has running statistics (running_mean, running_var) that are buffers, not parameters.
+
 ### Conformer Layers (to be filled)
 
 ```
@@ -328,7 +347,18 @@ encoder.layers.0.feed_forward1.linear1.weight → layers.0.ffn1.linear1.weight
   - `linear_pos` has NO bias (critical for weight compatibility)
   - `pos_bias_u`, `pos_bias_v`: shape (n_heads, d_k), initialized to zeros
   - `rel_shift`: Transformer-XL skewing trick for relative positions
-  - Scaling applied AFTER combining matrix_ac + matrix_bd
+  - Uses SDPA (scaled_dot_product_attention) for efficiency
+  - Pre-scales matrix_bd for SDPA's additive attention mask
+- [x] Documented weight mapping in WORKING_LOG.md
+
+### 2024-12-28: Convolution Module Complete
+- [x] Implemented `convolution.py` with `ConvolutionModule` class
+- [x] Created unit tests in `tests/test_convolution.py` (17 tests passing)
+- [x] Key implementation details:
+  - GLU on dim=1 (channel dimension) after pointwise expansion
+  - Depthwise Conv1d with symmetric padding for non-streaming
+  - BatchNorm1d (NOT LayerNorm!) - critical for correctness
+  - Swish/SiLU activation
 - [x] Documented weight mapping in WORKING_LOG.md
 
 (To be updated as implementation progresses)

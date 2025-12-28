@@ -1,7 +1,13 @@
 """FastConformer encoder implementation (inference only)."""
 
 from nemo_lite.conformer_lite.attention import RelPositionMultiHeadAttention
+from nemo_lite.conformer_lite.convolution import ConvolutionModule
 from nemo_lite.conformer_lite.pos_encoding import RelPositionalEncoding
 from nemo_lite.conformer_lite.subsampling import ConvSubsampling
 
-__all__ = ["ConvSubsampling", "RelPositionalEncoding", "RelPositionMultiHeadAttention"]
+__all__ = [
+    "ConvSubsampling",
+    "RelPositionalEncoding",
+    "RelPositionMultiHeadAttention",
+    "ConvolutionModule",
+]
