@@ -267,6 +267,26 @@ self.out = nn.Linear(...)
 | `encoder.pre_encode.out.weight` | `subsampling.out.weight` |
 | `encoder.pre_encode.out.bias` | `subsampling.out.bias` |
 
+### Self-Attention Module (`self_attn`)
+
+Each Conformer layer has a self-attention module with the following weights:
+
+| NeMo weight name | Our weight name |
+|-----------------|-----------------|
+| `encoder.layers.{i}.self_attn.linear_q.weight` | `layers.{i}.self_attn.linear_q.weight` |
+| `encoder.layers.{i}.self_attn.linear_q.bias` | `layers.{i}.self_attn.linear_q.bias` |
+| `encoder.layers.{i}.self_attn.linear_k.weight` | `layers.{i}.self_attn.linear_k.weight` |
+| `encoder.layers.{i}.self_attn.linear_k.bias` | `layers.{i}.self_attn.linear_k.bias` |
+| `encoder.layers.{i}.self_attn.linear_v.weight` | `layers.{i}.self_attn.linear_v.weight` |
+| `encoder.layers.{i}.self_attn.linear_v.bias` | `layers.{i}.self_attn.linear_v.bias` |
+| `encoder.layers.{i}.self_attn.linear_out.weight` | `layers.{i}.self_attn.linear_out.weight` |
+| `encoder.layers.{i}.self_attn.linear_out.bias` | `layers.{i}.self_attn.linear_out.bias` |
+| `encoder.layers.{i}.self_attn.linear_pos.weight` | `layers.{i}.self_attn.linear_pos.weight` |
+| `encoder.layers.{i}.self_attn.pos_bias_u` | `layers.{i}.self_attn.pos_bias_u` |
+| `encoder.layers.{i}.self_attn.pos_bias_v` | `layers.{i}.self_attn.pos_bias_v` |
+
+**Note**: `linear_pos` has NO bias (critical for weight loading).
+
 ### Conformer Layers (to be filled)
 
 ```
@@ -300,5 +320,15 @@ encoder.layers.0.feed_forward1.linear1.weight → layers.0.ffn1.linear1.weight
 - [x] Created unit tests in `tests/test_pos_encoding.py` (11 tests passing)
 - [x] No learnable parameters - uses sinusoidal embeddings as buffer
 - [x] Verified: position ordering, sinusoidal values, div_term formula
+
+### 2024-12-28: Multi-Head Attention Complete
+- [x] Implemented `attention.py` with `RelPositionMultiHeadAttention` class
+- [x] Created unit tests in `tests/test_attention.py` (17 tests passing)
+- [x] Key implementation details:
+  - `linear_pos` has NO bias (critical for weight compatibility)
+  - `pos_bias_u`, `pos_bias_v`: shape (n_heads, d_k), initialized to zeros
+  - `rel_shift`: Transformer-XL skewing trick for relative positions
+  - Scaling applied AFTER combining matrix_ac + matrix_bd
+- [x] Documented weight mapping in WORKING_LOG.md
 
 (To be updated as implementation progresses)
