@@ -208,3 +208,5 @@ __marimo__/
 .envrc.local
 
 .claude/settings.local.json
+
+result

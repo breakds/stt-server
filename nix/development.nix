@@ -11,29 +11,28 @@ in {
 
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
-          # Add custom python packages here, for example:
-          # my-python-pkg = py-final.callPackage ./pkgs/my-python-pkg {};
+          nemo-toolkit = py-final.callPackage ./pkgs/nemo-toolkit {};
         })
       ];
     })
   ];
 
-  perSystem = { system, pkgs, lib, ... }: {
-    _module.args.pkgs = import nixpkgs {
+  perSystem = { system, pkgs-dev, lib, ... }: {
+    _module.args.pkgs-dev = import nixpkgs {
       inherit system;
       config = {
         allowUnfree = true;
-        cudaSupport = !pkgs.stdenv.isDarwin;
-        cudaForwardCompat = !pkgs.stdenv.isDarwin;
+        cudaSupport = true;
+        cudaForwardCompat = true;
         cudaCapabilities = [ "7.5" "8.6" "8.9" "12.0" ];
       };
       overlays = [ self.overlays.dev ];
     };
 
-    devShells.default = pkgs.mkShell rec {
+    devShells.default = pkgs-dev.mkShell rec {
       name = "stt-server";
 
-      packages = with pkgs; [
+      packages = with pkgs-dev; [
         (python3.withPackages (p:
           with p; [
             numpy
@@ -51,6 +50,10 @@ in {
         export PS1="$(echo -e '\uf3e2') {\[$(tput sgr0)\]\[\033[38;5;228m\]\w\[$(tput sgr0)\]\[\033[38;5;15m\]} (${name}) \\$ \[$(tput sgr0)\]"
         export PYTHONPATH="$(pwd):$PYTHONPATH"
       '';
+    };
+
+    packages = {
+      inherit (pkgs-dev.python3Packages) nemo-toolkit;
     };
   };
 }
