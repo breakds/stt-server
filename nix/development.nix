@@ -37,6 +37,7 @@ in {
           with p; [
             numpy
             torch
+            nemo-toolkit
           ]
         ))
 
