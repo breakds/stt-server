@@ -37,6 +37,7 @@ in {
         (python3.withPackages (p:
           with p; [
             numpy
+            torch
           ]
         ))
 
