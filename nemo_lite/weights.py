@@ -7,19 +7,22 @@ The Canary-Qwen-2.5B weights are available on HuggingFace Hub at:
 
 Weight format: safetensors (4.77 GB total)
 
-The checkpoint uses "perception.encoder." prefix for encoder weights:
-    - perception.encoder.pre_encode.conv.{0,2,3,5,6}.* (subsampling)
-    - perception.encoder.layers.{i}.* (conformer blocks)
+The checkpoint uses these prefixes:
+    - perception.encoder.* (FastConformer encoder)
+    - perception.proj.* (audio projection layer)
+    - perception.preprocessor.* (mel filterbank, not loaded)
+    - llm.* (Qwen LLM with LoRA)
 
 Usage:
-    from nemo_lite.weights import load_encoder_weights
+    from nemo_lite.weights import load_encoder_weights, load_projection_weights
     from nemo_lite.conformer_lite import FastConformerEncoder
+    from nemo_lite.projection import AudioProjection
 
-    encoder = FastConformerEncoder(
-        feat_in=128, n_layers=32, d_model=1024,
-        d_ff=4096, n_heads=8, conv_kernel_size=9,
-    )
+    encoder = FastConformerEncoder(**get_encoder_config())
     load_encoder_weights(encoder, "nvidia/canary-qwen-2.5b")
+
+    projection = AudioProjection()
+    load_projection_weights(projection, "nvidia/canary-qwen-2.5b")
 """
 
 import re
@@ -249,3 +252,122 @@ def get_encoder_config(repo_id: str = "nvidia/canary-qwen-2.5b") -> dict:
         "dropout_rate": 0.1,
         "dropout_att": 0.1,
     }
+
+
+# =============================================================================
+# Projection Layer Weight Loading
+# =============================================================================
+
+_PROJECTION_PREFIX = "perception.proj."
+
+
+def map_projection_weight_key(ckpt_key: str) -> str | None:
+    """Map a checkpoint projection weight key to our implementation's key.
+
+    Args:
+        ckpt_key: Weight key from checkpoint.
+
+    Returns:
+        Mapped key for our implementation, or None if not a projection weight.
+    """
+    if not ckpt_key.startswith(_PROJECTION_PREFIX):
+        return None
+
+    # perception.proj.weight -> proj.weight
+    # perception.proj.bias -> proj.bias
+    return ckpt_key[len("perception."):]
+
+
+def load_projection_state_dict(
+    checkpoint_path: str,
+    device: str = "cpu",
+) -> dict[str, torch.Tensor]:
+    """Load projection layer weights from a safetensors checkpoint.
+
+    Args:
+        checkpoint_path: Path to safetensors file.
+        device: Device to load weights to.
+
+    Returns:
+        State dict with mapped keys for AudioProjection.
+    """
+    state_dict: dict[str, torch.Tensor] = {}
+
+    with safe_open(checkpoint_path, framework="pt", device=device) as f:
+        for ckpt_key in f.keys():
+            our_key = map_projection_weight_key(ckpt_key)
+            if our_key is not None:
+                state_dict[our_key] = f.get_tensor(ckpt_key)
+
+    return state_dict
+
+
+def load_projection_state_dict_from_hub(
+    repo_id: str = "nvidia/canary-qwen-2.5b",
+    device: str = "cpu",
+    token: str | None = None,
+) -> dict[str, torch.Tensor]:
+    """Load projection layer weights from HuggingFace Hub.
+
+    Args:
+        repo_id: HuggingFace Hub repository ID.
+        device: Device to load weights to.
+        token: Optional HuggingFace token for private repos.
+
+    Returns:
+        State dict with mapped keys for AudioProjection.
+    """
+    try:
+        from huggingface_hub import hf_hub_download, list_repo_files
+    except ImportError as e:
+        raise ImportError(
+            "huggingface_hub is required. Install with: pip install huggingface_hub"
+        ) from e
+
+    files = list_repo_files(repo_id, token=token)
+    safetensor_files = [f for f in files if f.endswith(".safetensors")]
+
+    if not safetensor_files:
+        raise ValueError(f"No safetensors files found in {repo_id}")
+
+    state_dict: dict[str, torch.Tensor] = {}
+
+    for filename in safetensor_files:
+        local_path = hf_hub_download(repo_id, filename, token=token)
+        with safe_open(local_path, framework="pt", device=device) as f:
+            for ckpt_key in f.keys():
+                our_key = map_projection_weight_key(ckpt_key)
+                if our_key is not None:
+                    state_dict[our_key] = f.get_tensor(ckpt_key)
+
+    return state_dict
+
+
+def load_projection_weights(
+    projection: torch.nn.Module,
+    source: str,
+    device: str = "cpu",
+    token: str | None = None,
+    strict: bool = True,
+) -> tuple[list[str], list[str]]:
+    """Load weights into an AudioProjection module.
+
+    Args:
+        projection: AudioProjection instance.
+        source: Either a local path to safetensors file, or a HuggingFace Hub repo ID.
+        device: Device to load weights to.
+        token: Optional HuggingFace token for private repos.
+        strict: Whether to require all weights to match.
+
+    Returns:
+        Tuple of (missing_keys, unexpected_keys) from load_state_dict.
+    """
+    if source.endswith(".safetensors"):
+        state_dict = load_projection_state_dict(source, device=device)
+    else:
+        state_dict = load_projection_state_dict_from_hub(
+            source, device=device, token=token
+        )
+
+    result = projection.load_state_dict(state_dict, strict=strict)
+    return result.missing_keys, result.unexpected_keys
