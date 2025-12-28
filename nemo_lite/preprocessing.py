@@ -20,6 +20,13 @@ import librosa
 class AudioPreprocessor(nn.Module):
     """Mel spectrogram preprocessor matching NeMo's implementation (inference only).
 
+    Input/Output:
+        Input: audio tensor of shape (B, T) where T is number of samples
+        Output: (mel, mel_lengths) where mel is (B, n_mels, T') and mel_lengths is (B,)
+
+        The output time dimension T' = ceil(T / hop_length) = (T + hop_length - 1) // hop_length
+        Example: 16000 samples (1 sec) -> 100 frames, 32000 samples (2 sec) -> 200 frames
+
     Pipeline:
         1. Pre-emphasis filter (y[n] = x[n] - 0.97 * x[n-1])
         2. STFT with Hann window
