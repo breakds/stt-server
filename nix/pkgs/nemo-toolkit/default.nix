@@ -32,6 +32,7 @@
   cloudpickle,
   peft,
   wandb,
+  fiddle,
   # Common dependencies (requirements_common.txt)
   einops,
   pandas,
@@ -101,6 +102,7 @@ buildPythonPackage rec {
     cloudpickle
     peft
     wandb
+    fiddle
     # Common (requirements_common.txt)
     einops
     pandas
@@ -138,7 +140,7 @@ buildPythonPackage rec {
 
   # Remove dependencies that are not packaged in nixpkgs or not needed for ASR
   pythonRemoveDeps = [
-    # Not in nixpkgs or hard to package
+    # ASR deps not in nixpkgs
     "lhotse"
     "kaldialign"
     "ctc-segmentation"
@@ -149,8 +151,12 @@ buildPythonPackage rec {
     "pyannote.metrics"
     "pyloudnorm"
     "whisper-normalizer"
-    "sacremoses"
+    # Common deps not in nixpkgs
     "mediapy"
+    # NVIDIA internal packages (not public)
+    "nv-one-logger-core"
+    "nv-one-logger-training-telemetry"
+    "nv-one-logger-pytorch-lightning-integration"
     # CUDA-specific (handled by torch)
     "numba-cuda"
   ];

@@ -11,6 +11,7 @@ in {
 
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
+          fiddle = py-final.callPackage ./pkgs/fiddle {};
           nemo-toolkit = py-final.callPackage ./pkgs/nemo-toolkit {};
         })
       ];
