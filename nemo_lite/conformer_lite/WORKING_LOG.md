@@ -396,7 +396,30 @@ All core components of the FastConformer encoder are implemented:
 - ConformerBlock (Macaron-style)
 - FastConformerEncoder (complete pipeline)
 
+### 2024-12-28: Weight Loading Complete
+- [x] Created `nemo_lite/weights.py` with weight loading utilities
+- [x] Created `nemo_lite/tests/test_weights.py` (15 tests passing)
+- [x] Key discoveries about checkpoint format:
+  - Prefix: `perception.encoder.` (not `encoder.`)
+  - Convolution module: `conv` (not `conv_module`) - mapped during loading
+  - Subsampling: Sequential indices (conv.0, conv.2, etc.) mapped to named modules
+- [x] Successfully loaded all 1292 encoder weights from `nvidia/canary-qwen-2.5b`
+- [x] Verified forward pass works with loaded weights
+- [x] Total: 108 tests passing
+
+## Weight Loading Complete!
+
+The FastConformer encoder can now load weights from the Canary-Qwen-2.5B checkpoint:
+
+```python
+from nemo_lite.conformer_lite import FastConformerEncoder
+from nemo_lite.weights import load_encoder_weights, get_encoder_config
+
+encoder = FastConformerEncoder(**get_encoder_config())
+load_encoder_weights(encoder, "nvidia/canary-qwen-2.5b")
+```
+
 Next steps:
-- [ ] Implement weight loading utility
-- [ ] Verify numerical equivalence with NeMo
+- [ ] Verify numerical equivalence with NeMo (compare outputs for same input)
+- [ ] Integrate with audio preprocessing
 - [ ] Integrate with Qwen decoder
