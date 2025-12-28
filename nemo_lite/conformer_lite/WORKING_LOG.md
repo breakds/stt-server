@@ -375,4 +375,28 @@ encoder.layers.0.feed_forward1.linear1.weight → layers.0.ffn1.linear1.weight
   - Pre-norm LayerNorm before each sub-module
   - Separate dropout wrapping each sub-module output
 
-(To be updated as implementation progresses)
+### 2024-12-28: FastConformer Encoder Complete
+- [x] Implemented `encoder.py` with `FastConformerEncoder` class
+- [x] Created unit tests in `tests/test_encoder.py` (12 tests passing)
+- [x] Complete pipeline:
+  - ConvSubsampling (8x time reduction)
+  - RelPositionalEncoding (sinusoidal, no learnable params)
+  - 32× ConformerBlock (configurable)
+  - Padding mask creation for variable-length inputs
+- [x] Total: 86 tests passing
+
+## Implementation Complete!
+
+All core components of the FastConformer encoder are implemented:
+- ConvSubsampling (dw_striding, 8x reduction)
+- RelPositionalEncoding (Transformer-XL style)
+- RelPositionMultiHeadAttention (with SDPA)
+- ConvolutionModule (BatchNorm, not LayerNorm)
+- FeedForwardModule (Swish activation)
+- ConformerBlock (Macaron-style)
+- FastConformerEncoder (complete pipeline)
+
+Next steps:
+- [ ] Implement weight loading utility
+- [ ] Verify numerical equivalence with NeMo
+- [ ] Integrate with Qwen decoder
