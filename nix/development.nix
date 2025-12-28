@@ -37,6 +37,11 @@ in {
           with p; [
             numpy
             torch
+            torchaudio
+            transformers
+            peft
+            safetensors
+            librosa
           ]
         ))
 

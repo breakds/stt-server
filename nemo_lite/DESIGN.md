@@ -32,7 +32,7 @@ PCM Audio (16-bit, mono)
     │
     ▼
 ┌─────────────────────────┐
-│   Mel Spectrogram       │  ← torchaudio
+│   Mel Spectrogram       │  ← librosa + torch.stft
 │   (128 features)        │
 └─────────────────────────┘
     │
@@ -60,22 +60,30 @@ Transcribed Text
 
 ## Modules
 
-### 1. Audio Preprocessing (`preprocessing.py`)
+### 1. Audio Preprocessing (`preprocessing.py`) ✅
 
 Converts raw PCM audio to mel spectrogram features.
 
-- Input: float32 tensor of audio samples (normalized to [-1, 1])
-- Output: mel spectrogram tensor (B, 128, T)
+- Input: float32 tensor of audio samples `(B, T)`, normalized to [-1, 1]
+- Output: tuple of `(mel, mel_lengths)` where mel is `(B, 128, T')` and mel_lengths is `(B,)`
 
-Parameters (matching original model):
+Pipeline:
+1. Pre-emphasis filter: `y[n] = x[n] - 0.97 * x[n-1]`
+2. STFT with Hann window
+3. Power spectrum (magnitude squared)
+4. Mel filterbank projection (librosa, slaney-normalized)
+5. Log scaling: `log(mel + 2^-24)`
+6. Per-feature normalization (z-score per mel bin)
+
+Parameters (matching NeMo's Canary config):
 - Sample rate: 16000 Hz
 - Mel features: 128
 - FFT size: 512
-- Window: 25ms (Hann)
-- Stride: 10ms
-- Normalization: per-feature
+- Window: 25ms / 400 samples (Hann)
+- Stride: 10ms / 160 samples
+- Pre-emphasis: 0.97
 
-Implementation: Use `torchaudio.transforms.MelSpectrogram` with matching parameters.
+Implementation: librosa for mel filterbank (matches NeMo exactly), PyTorch `torch.stft` for STFT.
 
 ### 2. Conformer Encoder (`conformer.py`)
 
@@ -135,8 +143,9 @@ Utility to load and map weights from the official checkpoint.
 ## Dependencies
 
 ### Required
-- `torch` - Core tensor operations
-- `torchaudio` - Mel spectrogram extraction, resampling
+- `torch` - Core tensor operations, STFT
+- `librosa` - Mel filterbank (matches NeMo exactly)
+- `torchaudio` - Audio resampling (if needed)
 - `transformers` - Qwen3 LLM loading
 - `peft` - LoRA adapter support
 - `safetensors` - Weight loading
