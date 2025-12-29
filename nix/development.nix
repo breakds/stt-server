@@ -42,6 +42,8 @@ in {
             peft
             safetensors
             librosa
+            rich
+            click
           ]
         ))
 
