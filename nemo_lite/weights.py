@@ -371,3 +371,124 @@ def load_projection_weights(
 
     result = projection.load_state_dict(state_dict, strict=strict)
     return result.missing_keys, result.unexpected_keys
+
+
+# =============================================================================
+# LLM Weight Loading
+# =============================================================================
+
+_LLM_PREFIX = "llm."
+
+
+def map_llm_weight_key(ckpt_key: str) -> str | None:
+    """Map a checkpoint LLM weight key to peft model key.
+
+    Args:
+        ckpt_key: Weight key from checkpoint.
+
+    Returns:
+        Mapped key for peft model, or None if not an LLM weight.
+    """
+    if not ckpt_key.startswith(_LLM_PREFIX):
+        return None
+
+    # llm.base_model.model.model... -> base_model.model.model...
+    return ckpt_key[len(_LLM_PREFIX):]
+
+
+def load_llm_state_dict(
+    checkpoint_path: str,
+    device: str = "cpu",
+) -> dict[str, torch.Tensor]:
+    """Load LLM weights from a safetensors checkpoint.
+
+    Args:
+        checkpoint_path: Path to safetensors file.
+        device: Device to load weights to.
+
+    Returns:
+        State dict with mapped keys for peft Qwen model.
+    """
+    state_dict: dict[str, torch.Tensor] = {}
+
+    with safe_open(checkpoint_path, framework="pt", device=device) as f:
+        for ckpt_key in f.keys():
+            our_key = map_llm_weight_key(ckpt_key)
+            if our_key is not None:
+                state_dict[our_key] = f.get_tensor(ckpt_key)
+
+    return state_dict
+
+
+def load_llm_state_dict_from_hub(
+    repo_id: str = "nvidia/canary-qwen-2.5b",
+    device: str = "cpu",
+    token: str | None = None,
+) -> dict[str, torch.Tensor]:
+    """Load LLM weights from HuggingFace Hub.
+
+    Args:
+        repo_id: HuggingFace Hub repository ID.
+        device: Device to load weights to.
+        token: Optional HuggingFace token for private repos.
+
+    Returns:
+        State dict with mapped keys for peft Qwen model.
+    """
+    try:
+        from huggingface_hub import hf_hub_download, list_repo_files
+    except ImportError as e:
+        raise ImportError(
+            "huggingface_hub is required. Install with: pip install huggingface_hub"
+        ) from e
+
+    files = list_repo_files(repo_id, token=token)
+    safetensor_files = [f for f in files if f.endswith(".safetensors")]
+
+    if not safetensor_files:
+        raise ValueError(f"No safetensors files found in {repo_id}")
+
+    state_dict: dict[str, torch.Tensor] = {}
+
+    for filename in safetensor_files:
+        local_path = hf_hub_download(repo_id, filename, token=token)
+        with safe_open(local_path, framework="pt", device=device) as f:
+            for ckpt_key in f.keys():
+                our_key = map_llm_weight_key(ckpt_key)
+                if our_key is not None:
+                    state_dict[our_key] = f.get_tensor(ckpt_key)
+
+    return state_dict
+
+
+def load_llm_weights(
+    llm_wrapper,
+    source: str,
+    device: str = "cpu",
+    token: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Load weights into a QwenWrapper's peft model.
+
+    Args:
+        llm_wrapper: QwenWrapper instance.
+        source: Either a local path to safetensors file, or a HuggingFace Hub repo ID.
+        device: Device to load weights to.
+        token: Optional HuggingFace token for private repos.
+
+    Returns:
+        Tuple of (missing_keys, unexpected_keys) from load_state_dict.
+
+    Note:
+        Missing keys for embed_tokens and lm_head are expected,
+        as these come from the base Qwen model.
+    """
+    if source.endswith(".safetensors"):
+        state_dict = load_llm_state_dict(source, device=device)
+    else:
+        state_dict = load_llm_state_dict_from_hub(
+            source, device=device, token=token
+        )
+
+    # Load with strict=False since embed_tokens and lm_head are not in checkpoint
+    result = llm_wrapper.model.load_state_dict(state_dict, strict=False)
+    return result.missing_keys, result.unexpected_keys
