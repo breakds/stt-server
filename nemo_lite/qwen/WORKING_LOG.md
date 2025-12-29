@@ -319,8 +319,22 @@ class CanaryQwen:
   - Generation: works (gibberish with fake audio)
 - [x] All 122 tests passing
 
-### Next: Full Model Integration
-- [ ] Create `CanaryQwen` class in `model.py`
-- [ ] Wire up: preprocessor → encoder → projection → LLM
-- [ ] Test end-to-end with real audio
+### 2024-12-28: Full Model Integration Complete
+- [x] Created `CanaryQwen` class in `model.py`
+- [x] Wired up: preprocessor → encoder → projection → LLM
+- [x] Integration test passes with fake audio
+- [x] All 122 tests passing
+
+**Usage:**
+```python
+from nemo_lite import CanaryQwen
+
+model = CanaryQwen(device="cuda")
+text = model.transcribe(audio, sample_rate=16000)
+```
+
+### Next: Real Audio Testing
+- [ ] Test with real speech audio files
+- [ ] Verify transcription quality matches NeMo reference
+- [ ] Performance benchmarking (GPU)
 
