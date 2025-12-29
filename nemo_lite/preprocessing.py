@@ -24,7 +24,7 @@ class AudioPreprocessor(nn.Module):
         Input: audio tensor of shape (B, T) where T is number of samples
         Output: (mel, mel_lengths) where mel is (B, n_mels, T') and mel_lengths is (B,)
 
-        The output time dimension T' = ceil(T / hop_length) = (T + hop_length - 1) // hop_length
+        The output time dimension T' = floor(T / hop_length) = T // hop_length
         Example: 16000 samples (1 sec) -> 100 frames, 32000 samples (2 sec) -> 200 frames
 
     Pipeline:
@@ -68,7 +68,8 @@ class AudioPreprocessor(nn.Module):
         self.normalize = normalize
 
         # Create Hann window (same as NeMo's default)
-        self.register_buffer("window", torch.hann_window(win_length))
+        # NeMo uses periodic=False for STFT windows
+        self.register_buffer("window", torch.hann_window(win_length, periodic=False))
 
         # Create mel filterbank using librosa (exactly what NeMo uses)
         mel_filterbank = librosa.filters.mel(
@@ -142,8 +143,10 @@ class AudioPreprocessor(nn.Module):
         # Log scaling with guard
         mel = torch.log(mel + self.log_zero_guard)
 
-        # Calculate output lengths (ceil division)
-        mel_lengths = (audio_lengths + self.hop_length - 1) // self.hop_length
+        # Calculate output lengths (floor division, matching NeMo's get_seq_len)
+        # NeMo: seq_len = floor((seq_len + pad_amount - n_fft) / hop_length)
+        # With center=True and default padding, pad_amount = n_fft, so: floor(seq_len / hop_length)
+        mel_lengths = audio_lengths // self.hop_length
 
         # Per-feature normalization
         if self.normalize == "per_feature":
@@ -193,9 +196,12 @@ class AudioPreprocessor(nn.Module):
 
         # Compute variance per feature (unbiased, N-1 denominator)
         # (x - mean)^2, summed over valid frames
+        # Guard against divide-by-zero when mel_lengths == 1 (single frame)
         diff = mel_masked - mel_mean.unsqueeze(2)
         diff = diff.masked_fill(~frame_mask, 0.0)
-        variance = (diff.pow(2).sum(dim=2)) / (mel_lengths.unsqueeze(1).float() - 1)
+        # Use max(N-1, 1) to avoid division by zero; for N=1, variance=0 anyway
+        denom = torch.clamp(mel_lengths.unsqueeze(1).float() - 1, min=1.0)
+        variance = diff.pow(2).sum(dim=2) / denom
         mel_std = torch.sqrt(variance)
 
         # Normalize: (x - mean) / (std + eps)

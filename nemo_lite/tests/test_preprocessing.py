@@ -136,6 +136,10 @@ class TestFullPipeline(unittest.TestCase):
         our_mel = our_mel[0].numpy()
 
         # librosa reference
+        # Use explicit symmetric Hann window to match NeMo's periodic=False
+        from scipy.signal.windows import hann
+        hann_window = hann(win_length, sym=True)  # sym=True matches periodic=False
+
         audio_preemph = np.concatenate(
             [[audio_np[0]], audio_np[1:] - preemph * audio_np[:-1]]
         )
@@ -145,7 +149,7 @@ class TestFullPipeline(unittest.TestCase):
             n_fft=n_fft,
             hop_length=hop_length,
             win_length=win_length,
-            window="hann",
+            window=hann_window,
             center=True,
             pad_mode="constant",
             power=2.0,

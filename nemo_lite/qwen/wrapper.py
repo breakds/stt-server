@@ -68,8 +68,13 @@ class QwenWrapper(nn.Module):
 
     @property
     def embed_tokens(self) -> nn.Embedding:
-        """Get the token embedding layer."""
-        return self.model.model.model.embed_tokens
+        """Get the token embedding layer.
+
+        Uses get_input_embeddings() for stability across HuggingFace/peft versions,
+        rather than accessing the internal path (model.model.model.embed_tokens)
+        which can change between library versions.
+        """
+        return self.model.get_input_embeddings()
 
     @property
     def hidden_size(self) -> int:
@@ -185,7 +190,11 @@ class QwenWrapper(nn.Module):
                 **generate_kwargs,
             )
 
-        # Decode output (only new tokens, no prompt to strip)
+        # Decode output
+        # NOTE: When using inputs_embeds (not input_ids), HuggingFace generate()
+        # returns ONLY the newly generated tokens, not the input. This is because
+        # the input was embeddings, not token IDs, so there are no input IDs to
+        # prepend to the output. Therefore, no prompt stripping is needed here.
         text = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
         return text
 

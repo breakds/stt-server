@@ -153,9 +153,13 @@ class FastConformerEncoder(nn.Module):
         max_len = audio_signal.size(1)
         pad_mask = self._create_pad_mask(length, max_len)
 
-        # For full attention (non-streaming), att_mask is None
-        # Canary uses att_context_size=[-1, -1] which means unlimited context
-        att_mask = None
+        # For full attention (non-streaming), we still need to mask padded positions.
+        # NeMo builds att_mask from pad_mask even for unlimited context (att_context_size=[-1,-1]).
+        # The attention mask prevents queries from attending to padded key/value positions.
+        # Shape: (B, T, T) where True = masked (should not attend)
+        # pad_mask[:, None, :] broadcasts query dim, pad_mask[:, :, None] broadcasts key dim
+        # We mask position (i,j) if position j is padded (regardless of i)
+        att_mask = pad_mask.unsqueeze(1).expand(-1, max_len, -1)
 
         # Apply Conformer blocks
         for layer in self.layers:
