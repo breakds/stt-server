@@ -48,7 +48,7 @@ class QwenWrapper(nn.Module):
         # Load base model
         self.model = AutoModelForCausalLM.from_pretrained(
             "Qwen/Qwen3-1.7B",
-            torch_dtype=dtype,
+            dtype=dtype,
             device_map=device,
         )
 
@@ -65,6 +65,12 @@ class QwenWrapper(nn.Module):
         )
         self.model = get_peft_model(self.model, lora_config)
         self.model.eval()
+
+        # Clear sampling-related generation config to avoid warnings when using greedy decoding
+        # The base Qwen model sets these, but we use do_sample=False
+        self.model.generation_config.temperature = None
+        self.model.generation_config.top_p = None
+        self.model.generation_config.top_k = None
 
     @property
     def embed_tokens(self) -> nn.Embedding:
