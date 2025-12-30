@@ -73,7 +73,13 @@ def chunk_audio(audio: np.ndarray, sr: int, chunk_duration: float) -> list[np.nd
     type=float,
     help="Duration of each audio chunk in seconds (default: 30)",
 )
-def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float):
+@click.option(
+    "--cache-dir",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Directory to cache downloaded models (default: HuggingFace default)",
+)
+def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float, cache_dir: Path | None):
     """Transcribe audio using Canary-Qwen-2.5B."""
 
     console.print(f"\n[bold blue]Canary-Qwen-2.5B Transcription[/bold blue]\n")
@@ -112,7 +118,7 @@ def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float):
 
         from nemo_lite import CanaryQwen
 
-        model = CanaryQwen(device=device)
+        model = CanaryQwen(device=device, cache_dir=str(cache_dir) if cache_dir else None)
         load_time = time.time() - t0
 
     console.print(f"[dim]Model loaded in[/dim] {load_time:.1f}s\n")

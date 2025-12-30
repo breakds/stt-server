@@ -135,6 +135,7 @@ def load_encoder_state_dict_from_hub(
     repo_id: str = "nvidia/canary-qwen-2.5b",
     device: str = "cpu",
     token: str | None = None,
+    cache_dir: str | None = None,
 ) -> dict[str, torch.Tensor]:
     """Load encoder weights from HuggingFace Hub.
 
@@ -144,6 +145,7 @@ def load_encoder_state_dict_from_hub(
         repo_id: HuggingFace Hub repository ID.
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         State dict with mapped keys for FastConformerEncoder.
@@ -178,6 +180,7 @@ def load_encoder_state_dict_from_hub(
             repo_id,
             filename,
             token=token,
+            cache_dir=cache_dir,
         )
         with safe_open(local_path, framework="pt", device=device) as f:
             for nemo_key in f.keys():
@@ -194,6 +197,7 @@ def load_encoder_weights(
     device: str = "cpu",
     token: str | None = None,
     strict: bool = True,
+    cache_dir: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Load weights into a FastConformerEncoder.
 
@@ -203,6 +207,7 @@ def load_encoder_weights(
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
         strict: Whether to require all weights to match.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         Tuple of (missing_keys, unexpected_keys) from load_state_dict.
@@ -216,7 +221,7 @@ def load_encoder_weights(
     else:
         # HuggingFace Hub repo ID
         state_dict = load_encoder_state_dict_from_hub(
-            source, device=device, token=token
+            source, device=device, token=token, cache_dir=cache_dir
         )
 
     result = encoder.load_state_dict(state_dict, strict=strict)
@@ -306,6 +311,7 @@ def load_projection_state_dict_from_hub(
     repo_id: str = "nvidia/canary-qwen-2.5b",
     device: str = "cpu",
     token: str | None = None,
+    cache_dir: str | None = None,
 ) -> dict[str, torch.Tensor]:
     """Load projection layer weights from HuggingFace Hub.
 
@@ -313,6 +319,7 @@ def load_projection_state_dict_from_hub(
         repo_id: HuggingFace Hub repository ID.
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         State dict with mapped keys for AudioProjection.
@@ -333,7 +340,7 @@ def load_projection_state_dict_from_hub(
     state_dict: dict[str, torch.Tensor] = {}
 
     for filename in safetensor_files:
-        local_path = hf_hub_download(repo_id, filename, token=token)
+        local_path = hf_hub_download(repo_id, filename, token=token, cache_dir=cache_dir)
         with safe_open(local_path, framework="pt", device=device) as f:
             for ckpt_key in f.keys():
                 our_key = map_projection_weight_key(ckpt_key)
@@ -349,6 +356,7 @@ def load_projection_weights(
     device: str = "cpu",
     token: str | None = None,
     strict: bool = True,
+    cache_dir: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Load weights into an AudioProjection module.
 
@@ -358,6 +366,7 @@ def load_projection_weights(
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
         strict: Whether to require all weights to match.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         Tuple of (missing_keys, unexpected_keys) from load_state_dict.
@@ -366,7 +375,7 @@ def load_projection_weights(
         state_dict = load_projection_state_dict(source, device=device)
     else:
         state_dict = load_projection_state_dict_from_hub(
-            source, device=device, token=token
+            source, device=device, token=token, cache_dir=cache_dir
         )
 
     result = projection.load_state_dict(state_dict, strict=strict)
@@ -424,6 +433,7 @@ def load_llm_state_dict_from_hub(
     repo_id: str = "nvidia/canary-qwen-2.5b",
     device: str = "cpu",
     token: str | None = None,
+    cache_dir: str | None = None,
 ) -> dict[str, torch.Tensor]:
     """Load LLM weights from HuggingFace Hub.
 
@@ -431,6 +441,7 @@ def load_llm_state_dict_from_hub(
         repo_id: HuggingFace Hub repository ID.
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         State dict with mapped keys for peft Qwen model.
@@ -451,7 +462,7 @@ def load_llm_state_dict_from_hub(
     state_dict: dict[str, torch.Tensor] = {}
 
     for filename in safetensor_files:
-        local_path = hf_hub_download(repo_id, filename, token=token)
+        local_path = hf_hub_download(repo_id, filename, token=token, cache_dir=cache_dir)
         with safe_open(local_path, framework="pt", device=device) as f:
             for ckpt_key in f.keys():
                 our_key = map_llm_weight_key(ckpt_key)
@@ -466,6 +477,7 @@ def load_llm_weights(
     source: str,
     device: str = "cpu",
     token: str | None = None,
+    cache_dir: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Load weights into a QwenWrapper's peft model.
 
@@ -474,6 +486,7 @@ def load_llm_weights(
         source: Either a local path to safetensors file, or a HuggingFace Hub repo ID.
         device: Device to load weights to.
         token: Optional HuggingFace token for private repos.
+        cache_dir: Directory to cache downloaded files. If None, uses HuggingFace default.
 
     Returns:
         Tuple of (missing_keys, unexpected_keys) from load_state_dict.
@@ -486,7 +499,7 @@ def load_llm_weights(
         state_dict = load_llm_state_dict(source, device=device)
     else:
         state_dict = load_llm_state_dict_from_hub(
-            source, device=device, token=token
+            source, device=device, token=token, cache_dir=cache_dir
         )
 
     # Load with strict=False since embed_tokens and lm_head are not in checkpoint

@@ -25,19 +25,24 @@ class QwenWrapper(nn.Module):
     Args:
         device: Device to load model on ("cpu", "cuda", etc.)
         dtype: Model dtype (torch.float16, torch.bfloat16, etc.)
+        cache_dir: Directory to cache downloaded models. If None, uses HuggingFace default.
     """
 
     def __init__(
         self,
         device: str = "cpu",
         dtype: torch.dtype = torch.float16,
+        cache_dir: str | None = None,
     ):
         super().__init__()
         self.device = device
         self.dtype = dtype
 
         # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "Qwen/Qwen3-1.7B",
+            cache_dir=cache_dir,
+        )
 
         # Add audio placeholder token
         self.tokenizer.add_special_tokens({
@@ -50,6 +55,7 @@ class QwenWrapper(nn.Module):
             "Qwen/Qwen3-1.7B",
             dtype=dtype,
             device_map=device,
+            cache_dir=cache_dir,
         )
 
         # Resize embeddings for new token

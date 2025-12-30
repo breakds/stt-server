@@ -43,6 +43,7 @@ class CanaryQwen(nn.Module):
         device: Device to load model on ("cpu", "cuda", "cuda:0", etc.).
         dtype: Model dtype. Default: torch.float16.
         load_weights: Whether to load pretrained weights. Default: True.
+        cache_dir: Directory to cache downloaded models. If None, uses HuggingFace default.
     """
 
     def __init__(
@@ -50,10 +51,12 @@ class CanaryQwen(nn.Module):
         device: str = "cpu",
         dtype: torch.dtype = torch.float16,
         load_weights: bool = True,
+        cache_dir: str | None = None,
     ):
         super().__init__()
         self.device = device
         self.dtype = dtype
+        self.cache_dir = cache_dir
 
         # Create components
         self.preprocessor = AudioPreprocessor()
@@ -66,7 +69,7 @@ class CanaryQwen(nn.Module):
             llm_dim=2048,
         )
 
-        self.llm = QwenWrapper(device=device, dtype=dtype)
+        self.llm = QwenWrapper(device=device, dtype=dtype, cache_dir=cache_dir)
 
         # Move encoder components to device and dtype
         self.preprocessor = self.preprocessor.to(device)
@@ -86,7 +89,7 @@ class CanaryQwen(nn.Module):
 
         # Load encoder weights (FastConformer)
         missing, unexpected = load_encoder_weights(
-            self.encoder, source, device=self.device
+            self.encoder, source, device=self.device, cache_dir=self.cache_dir
         )
         if missing:
             print(f"Warning: Encoder missing keys: {missing}")
@@ -95,7 +98,7 @@ class CanaryQwen(nn.Module):
 
         # Load projection weights
         missing, unexpected = load_projection_weights(
-            self.projection, source, device=self.device
+            self.projection, source, device=self.device, cache_dir=self.cache_dir
         )
         if missing:
             print(f"Warning: Projection missing keys: {missing}")
@@ -104,7 +107,7 @@ class CanaryQwen(nn.Module):
 
         # Load LLM weights (Qwen + LoRA)
         missing, unexpected = load_llm_weights(
-            self.llm, source, device=self.device
+            self.llm, source, device=self.device, cache_dir=self.cache_dir
         )
         # Note: embed_tokens and lm_head are expected to be missing
         # as they come from the base Qwen model
