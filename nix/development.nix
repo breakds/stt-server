@@ -44,6 +44,10 @@ in {
             librosa
             rich
             click
+
+            fastapi
+            uvicorn
+            pydantic
           ]
         ))
 
