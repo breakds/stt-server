@@ -79,7 +79,13 @@ def chunk_audio(audio: np.ndarray, sr: int, chunk_duration: float) -> list[np.nd
     type=click.Path(path_type=Path),
     help="Directory to cache downloaded models (default: HuggingFace default)",
 )
-def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float, cache_dir: Path | None):
+@click.option(
+    "--prompt",
+    default=None,
+    type=str,
+    help="Custom prompt for transcription. Use <|audioplaceholder|> where audio should be inserted.",
+)
+def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float, cache_dir: Path | None, prompt: str | None):
     """Transcribe audio using Canary-Qwen-2.5B."""
 
     console.print(f"\n[bold blue]Canary-Qwen-2.5B Transcription[/bold blue]\n")
@@ -141,6 +147,7 @@ def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float, 
                 chunk_transcript = model.transcribe(
                     chunk,
                     sample_rate=sr,
+                    prompt=prompt,
                     max_new_tokens=max_tokens,
                 )
                 transcripts.append(chunk_transcript.strip())
@@ -159,6 +166,7 @@ def main(audio_file: Path, device: str, max_tokens: int, chunk_duration: float, 
             transcript = model.transcribe(
                 audio,
                 sample_rate=sr,
+                prompt=prompt,
                 max_new_tokens=max_tokens,
             )
 
