@@ -44,7 +44,7 @@ in {
             librosa
             rich
             click
-
+            loguru
             fastapi
             uvicorn
             pydantic
