@@ -1,14 +1,13 @@
 { inputs, ... }:
 
 let
-  self = inputs.self;
-  nixpkgs = inputs.nixpkgs;
+  inherit (inputs) self nixpkgs ml-pkgs;
 in {
   flake.overlays.dev = nixpkgs.lib.composeManyExtensions [
+    ml-pkgs.overlays.gen-ai
     (final: prev: {
       # Add custom packages here, for example:
       # my-package = final.callPackage ./pkgs/my-package {};
-
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
           # Add custom python packages here
@@ -48,6 +47,7 @@ in {
             fastapi
             uvicorn
             pydantic
+            pysilero-vad
           ]
         ))
 

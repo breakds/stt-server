@@ -20,6 +20,29 @@
         "type": "github"
       }
     },
+    "ml-pkgs": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1767426524,
+        "narHash": "sha256-XhueKfD/z3MEqfY/x1iT0wFj27jS/LehGh/gDfAb9sM=",
+        "owner": "nixvital",
+        "repo": "ml-pkgs",
+        "rev": "91276651bf011bb90213ff53ead7a38a9e4ed8fc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixvital",
+        "repo": "ml-pkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1760524057,
@@ -39,6 +62,7 @@
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
+        "ml-pkgs": "ml-pkgs",
         "nixpkgs": "nixpkgs"
       }
     }
