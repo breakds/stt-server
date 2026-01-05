@@ -117,8 +117,8 @@ def main():
     )
     parser.add_argument(
         "--uri",
-        default="ws://localhost:8000/ws/transcribe",
-        help="WebSocket URI (default: ws://localhost:8000/ws/transcribe)",
+        default="ws://localhost:15751/ws/transcribe",
+        help="WebSocket URI (default: ws://localhost:15751/ws/transcribe)",
     )
     parser.add_argument(
         "--chunk-ms",

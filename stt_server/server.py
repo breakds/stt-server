@@ -11,6 +11,7 @@ WebSocket Protocol:
     5. Client disconnects when done
 """
 
+import click
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from loguru import logger
 from pydantic import ValidationError
@@ -71,3 +72,17 @@ async def websocket_transcribe(websocket: WebSocket):
             pass
     finally:
         await session.close()
+
+
+@click.command()
+@click.option("--port", default=15751, help="Port to listen on")
+@click.option("--host", default="0.0.0.0", help="Host to bind to")
+def main(port: int, host: str):
+    """Run the STT WebSocket server."""
+    import uvicorn
+
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()
