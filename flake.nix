@@ -10,6 +10,12 @@
     ml-pkgs.url = "github:nixvital/ml-pkgs";
     ml-pkgs.inputs.nixpkgs.follows = "nixpkgs";
     ml-pkgs.inputs.flake-parts.follows = "flake-parts";
+
+    crane.url = "github:ipetkov/crane";
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs = { self, flake-parts, ... }@inputs:
@@ -18,6 +24,7 @@
 
       imports = [
         ./nix/development.nix
+        ./strops-rs/nix/development.nix
       ];
 
       perSystem = { system, config, pkgs, ... }: {
