@@ -80,3 +80,33 @@ class ErrorResponse(Protocol):
     error: str
     code: str = "TRANSCRIPTION_ERROR"
 
+
+# =============================================================================
+# Inter-Stage Types (internal pipeline communication)
+# =============================================================================
+
+
+class AudioChunk(BaseModel):
+    """Accumulated audio buffer passed from VAD to ASR stage.
+
+    Contains a chunk of audio that has been segmented by the VAD stage
+    based on silence gaps.
+
+    Attributes:
+        samples: Raw PCM audio bytes (16-bit signed, mono).
+        sample_rate: Sample rate in Hz.
+    """
+
+    samples: bytes
+    sample_rate: int
+
+
+class EndOfTurnSignal(BaseModel):
+    """Signal indicating end of a speaking turn.
+
+    Emitted by VAD stage when a large silence gap is detected,
+    signaling that the speaker has finished their turn.
+    """
+
+    pass
+
