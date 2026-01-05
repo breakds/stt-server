@@ -1,3 +1,20 @@
+/// Result of semi-global alignment between two sequences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlignmentResult {
+    /// Start of overlap in source (inclusive, 0-based).
+    /// The overlapping suffix of source is `source[overlap_start_source..]`.
+    pub overlap_start_source: usize,
+    /// End of overlap in target (exclusive, 0-based).
+    /// The overlapping prefix of target is `target[..overlap_end_target]`.
+    pub overlap_end_target: usize,
+    /// Position of first match in source (inclusive, 0-based).
+    /// Use this for stitching: `source[..first_match_source] + target[first_match_target..]`
+    pub first_match_source: usize,
+    /// Position of first match in target (inclusive, 0-based).
+    /// Use this for stitching: `source[..first_match_source] + target[first_match_target..]`
+    pub first_match_target: usize,
+}
+
 /// Scoring parameters for semi-global alignment.
 #[derive(Debug, Clone, Copy)]
 pub struct ScoringParams {
@@ -53,26 +70,35 @@ impl ScoringParams {
 ///
 /// # Returns
 ///
-/// - `Some((overlap_start, overlap_end))` if a valid overlap is found:
-///   - `overlap_start`: 0-based inclusive index in source where overlap begins
-///   - `overlap_end`: 0-based exclusive index in target where overlap ends
-///   - The overlapping regions are: `source[overlap_start..]` and `target[..overlap_end]`
-///   - To merge: `source[..overlap_start].chain(target)` gives the combined sequence
+/// - `Some(AlignmentResult)` if a valid overlap is found, containing:
+///   - `overlap_start_source`: where overlap begins in source (inclusive)
+///   - `overlap_end_target`: where overlap ends in target (exclusive)
+///   - `first_match_source`: position of first matching element in source
+///   - `first_match_target`: position of first matching element in target
+///
+///   The overlapping regions are: `source[overlap_start_source..]` and `target[..overlap_end_target]`
+///
+///   Two merge strategies:
+///   - Full overlap: `source[..overlap_start_source] + target`
+///   - Stitch at first match: `source[..first_match_source] + target[first_match_target..]`
+///     (preferred for ASR where target's first word may be garbled)
 ///
 /// - `None` if no valid overlap exists (empty inputs, or best alignment score ≤ 0)
 ///
 /// # Examples
 ///
 /// ```
-/// use strops::alignment::{semi_global_align, ScoringParams};
+/// use strops::alignment::{semi_global_align, ScoringParams, AlignmentResult};
 ///
 /// let source = vec!["the", "quick", "brown", "fox"];
 /// let target = vec!["brown", "fox", "jumps", "over"];
 ///
-/// let result = semi_global_align(&source, &target, ScoringParams::default());
-/// assert_eq!(result, Some((2, 2)));
-/// // source[2..] = ["brown", "fox"] overlaps with target[..2] = ["brown", "fox"]
-/// // Merge: source[..2] + target = ["the", "quick", "brown", "fox", "jumps", "over"]
+/// let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+/// assert_eq!(result.overlap_start_source, 2);
+/// assert_eq!(result.overlap_end_target, 2);
+/// assert_eq!(result.first_match_source, 2);
+/// assert_eq!(result.first_match_target, 0);
+/// // Stitch: source[..2] + target[0..] = ["the", "quick", "brown", "fox", "jumps", "over"]
 /// ```
 ///
 /// # Scoring Tips
@@ -81,7 +107,7 @@ impl ScoringParams {
 ///   to overcome a single gap, since 1 match + 1 gap = 0 (returns None)
 /// - For ASR with potential transcription errors, use higher match reward like
 ///   `ScoringParams::new(2.0, -1.0)` to tolerate occasional mismatches
-pub fn semi_global_align<T: PartialEq>(source: &[T], target: &[T], scoring: ScoringParams) -> Option<(usize, usize)> {
+pub fn semi_global_align<T: PartialEq>(source: &[T], target: &[T], scoring: ScoringParams) -> Option<AlignmentResult> {
     if source.is_empty() || target.is_empty() {
         return None;
     }
@@ -193,13 +219,27 @@ pub fn semi_global_align<T: PartialEq>(source: &[T], target: &[T], scoring: Scor
     //   - On mismatch: move to the cell (up or left) that contributed the score
     //   - Stop when we hit a zero score (alignment start) or grid boundary
     //
+    // We also track the first match position (for stitching at clean word boundaries).
+    // Since we trace backwards, the "first match" in sequence order is the last match
+    // we encounter during traceback.
+    //
     // The loop condition `i > 1` ensures we don't underflow when computing `i - 1`.
     // When i = 1, we've traced back to consider source[0], and the loop exits.
+
+    // Track first match position (last one seen during backward traceback).
+    // Initialize to current position; will be updated when we see matches.
+    let mut first_match_source = i - 1;
+    let mut first_match_target = j - 1;
 
     while j > 0 && i > 1 {
         // source[i-1] and target[j-1] are the elements at current 1-based grid position
         if source[i - 1] == target[j - 1] {
-            // This was a match; check if we should continue tracing
+            // This was a match; record this position (overwritten as we go back,
+            // so the final value will be the first match in sequence order)
+            first_match_source = i - 1;
+            first_match_target = j - 1;
+
+            // Check if we should continue tracing
             if grid.get(i - 1, j - 1) <= 0f64 {
                 // Previous cell is zero/negative, meaning alignment started here
                 break;
@@ -221,12 +261,24 @@ pub fn semi_global_align<T: PartialEq>(source: &[T], target: &[T], scoring: Scor
         }
     }
 
+    // Check the final position (when i = 1, we haven't checked source[0] yet)
+    // This handles the case where the alignment extends to the very first element
+    if i == 1 && j > 0 && source[0] == target[j - 1] {
+        first_match_source = 0;
+        first_match_target = j - 1;
+    }
+
     // Convert i from 1-based grid index to 0-based inclusive index for source.
     // In the grid, i=1 corresponds to source[0], i=2 to source[1], etc.
     // So the overlap starts at source index (i - 1).
     let overlap_start_in_source = i - 1;
 
-    Some((overlap_start_in_source, overlap_end_in_target))
+    Some(AlignmentResult {
+        overlap_start_source: overlap_start_in_source,
+        overlap_end_target: overlap_end_in_target,
+        first_match_source,
+        first_match_target,
+    })
 }
 
 #[cfg(test)]
@@ -282,8 +334,11 @@ mod tests {
     fn single_elements_match() {
         let source = s(&["a"]);
         let target = s(&["a"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((0, 1)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 0);
+        assert_eq!(result.overlap_end_target, 1);
+        assert_eq!(result.first_match_source, 0);
+        assert_eq!(result.first_match_target, 0);
         // source[0..] overlaps with target[..1] → entire source matches entire target
     }
 
@@ -296,8 +351,11 @@ mod tests {
         // Overlap: source[1..] = ["b", "c"] matches target[..2] = ["b", "c"]
         let source = s(&["a", "b", "c"]);
         let target = s(&["b", "c", "d"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((1, 2)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 1);
+        assert_eq!(result.overlap_end_target, 2);
+        assert_eq!(result.first_match_source, 1);
+        assert_eq!(result.first_match_target, 0);
     }
 
     #[test]
@@ -307,8 +365,11 @@ mod tests {
         // Overlap: source[0..] = ["a", "b"] matches target[..2] = ["a", "b"]
         let source = s(&["a", "b"]);
         let target = s(&["a", "b", "c", "d"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((0, 2)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 0);
+        assert_eq!(result.overlap_end_target, 2);
+        assert_eq!(result.first_match_source, 0);
+        assert_eq!(result.first_match_target, 0);
     }
 
     #[test]
@@ -318,16 +379,22 @@ mod tests {
         // Overlap: source[2..] = ["c", "d"] matches target[..2] = ["c", "d"]
         let source = s(&["a", "b", "c", "d"]);
         let target = s(&["c", "d"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((2, 2)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 2);
+        assert_eq!(result.overlap_end_target, 2);
+        assert_eq!(result.first_match_source, 2);
+        assert_eq!(result.first_match_target, 0);
     }
 
     #[test]
     fn entire_source_matches_entire_target() {
         let source = s(&["a", "b", "c"]);
         let target = s(&["a", "b", "c"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((0, 3)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 0);
+        assert_eq!(result.overlap_end_target, 3);
+        assert_eq!(result.first_match_source, 0);
+        assert_eq!(result.first_match_target, 0);
     }
 
     // ==================== Overlap with Gaps Tests ====================
@@ -342,11 +409,9 @@ mod tests {
         let target = s(&["b", "x", "c", "d"]);
         // Use higher match reward to make gapped alignment clearly better
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
-        assert_eq!(start, 1); // overlap starts at source[1]
-        assert_eq!(end, 3);   // overlap ends at target[..3] (includes b, x, c)
+        let result = semi_global_align(&source, &target, scoring).unwrap();
+        assert_eq!(result.overlap_start_source, 1); // overlap starts at source[1]
+        assert_eq!(result.overlap_end_target, 3);   // overlap ends at target[..3] (includes b, x, c)
     }
 
     #[test]
@@ -358,11 +423,9 @@ mod tests {
         let target = s(&["b", "c", "d"]);
         // Use higher match reward to make gapped alignment clearly better
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
-        assert_eq!(start, 1); // overlap starts at source[1]
-        assert_eq!(end, 2);   // overlap ends at target[..2]
+        let result = semi_global_align(&source, &target, scoring).unwrap();
+        assert_eq!(result.overlap_start_source, 1); // overlap starts at source[1]
+        assert_eq!(result.overlap_end_target, 2);   // overlap ends at target[..2]
     }
 
     // ==================== Merge Semantics Tests ====================
@@ -372,12 +435,18 @@ mod tests {
         // Verify that source[..start] + target gives correct merge
         let source = s(&["The", "quick", "brown", "fox"]);
         let target = s(&["brown", "fox", "jumps", "over"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((2, 2)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 2);
+        assert_eq!(result.overlap_end_target, 2);
+        assert_eq!(result.first_match_source, 2);
+        assert_eq!(result.first_match_target, 0);
 
-        // Merge: source[..2] + target = ["The", "quick"] + ["brown", "fox", "jumps", "over"]
-        let (start, _) = result.unwrap();
-        let merged: Vec<_> = source[..start].iter().chain(target.iter()).cloned().collect();
+        // Merge using first_match: source[..first_match_source] + target[first_match_target..]
+        let merged: Vec<_> = source[..result.first_match_source]
+            .iter()
+            .chain(target[result.first_match_target..].iter())
+            .cloned()
+            .collect();
         assert_eq!(merged, s(&["The", "quick", "brown", "fox", "jumps", "over"]));
     }
 
@@ -385,12 +454,18 @@ mod tests {
     fn merge_semantics_full_overlap() {
         let source = s(&["a", "b"]);
         let target = s(&["a", "b", "c"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((0, 2)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 0);
+        assert_eq!(result.overlap_end_target, 2);
+        assert_eq!(result.first_match_source, 0);
+        assert_eq!(result.first_match_target, 0);
 
-        // Merge: source[..0] + target = [] + ["a", "b", "c"]
-        let (start, _) = result.unwrap();
-        let merged: Vec<_> = source[..start].iter().chain(target.iter()).cloned().collect();
+        // Merge using first_match: source[..0] + target[0..] = [] + ["a", "b", "c"]
+        let merged: Vec<_> = source[..result.first_match_source]
+            .iter()
+            .chain(target[result.first_match_target..].iter())
+            .cloned()
+            .collect();
         assert_eq!(merged, s(&["a", "b", "c"]));
     }
 
@@ -400,16 +475,22 @@ mod tests {
     fn works_with_characters() {
         let source: Vec<char> = "hello".chars().collect();
         let target: Vec<char> = "lloworld".chars().collect();
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((2, 3))); // "llo" overlaps
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 2);
+        assert_eq!(result.overlap_end_target, 3); // "llo" overlaps
+        assert_eq!(result.first_match_source, 2);
+        assert_eq!(result.first_match_target, 0);
     }
 
     #[test]
     fn works_with_integers() {
         let source = vec![1, 2, 3, 4];
         let target = vec![3, 4, 5, 6];
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((2, 2))); // [3, 4] overlaps
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 2);
+        assert_eq!(result.overlap_end_target, 2); // [3, 4] overlaps
+        assert_eq!(result.first_match_source, 2);
+        assert_eq!(result.first_match_target, 0);
     }
 
     // ==================== Scoring Parameter Tests ====================
@@ -465,13 +546,11 @@ mod tests {
         let source = s(&["the", "quick", "brown", "fox"]);
         let target = s(&["brown", "box", "jumps", "over"]);
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
+        let result = semi_global_align(&source, &target, scoring).unwrap();
         // Should find overlap starting at "brown" (index 2)
-        assert_eq!(start, 2);
+        assert_eq!(result.overlap_start_source, 2);
         // End should include at least "brown"
-        assert!(end >= 1);
+        assert!(result.overlap_end_target >= 1);
     }
 
     #[test]
@@ -484,14 +563,12 @@ mod tests {
         let target = s(&["the", "whether", "is", "nice", "today"]);
         // Use scoring that tolerates gaps
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
+        let result = semi_global_align(&source, &target, scoring).unwrap();
         // Should find some overlap - exact position depends on algorithm
         // Key assertion: overlap was found and makes sense
-        assert!(start < source.len());
-        assert!(end <= target.len());
-        assert!(end >= 2); // Should capture multiple words
+        assert!(result.overlap_start_source < source.len());
+        assert!(result.overlap_end_target <= target.len());
+        assert!(result.overlap_end_target >= 2); // Should capture multiple words
     }
 
     #[test]
@@ -502,11 +579,9 @@ mod tests {
         // Overlap region has matching "the", "store" despite context differences
         let source = s(&["going", "to", "the", "store", "today"]);
         let target = s(&["the", "store", "to", "buy", "milk"]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert!(result.is_some());
-        let (start, _) = result.unwrap();
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
         // Should align on "the", "store"
-        assert_eq!(start, 2);
+        assert_eq!(result.overlap_start_source, 2);
     }
 
     #[test]
@@ -518,13 +593,11 @@ mod tests {
         let source = s(&["the", "big", "brown", "dog"]);
         let target = s(&["big", "old", "brown", "dog", "barks"]);
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
+        let result = semi_global_align(&source, &target, scoring).unwrap();
         // Should find overlap starting at "big" (index 1)
-        assert_eq!(start, 1);
+        assert_eq!(result.overlap_start_source, 1);
         // Should extend through "dog"
-        assert_eq!(end, 4);
+        assert_eq!(result.overlap_end_target, 4);
     }
 
     #[test]
@@ -536,12 +609,10 @@ mod tests {
         let source = s(&["they're", "going", "to", "their", "house"]);
         let target = s(&["to", "there", "house", "now"]);
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&source, &target, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
+        let result = semi_global_align(&source, &target, scoring).unwrap();
         // Should align "to" and "house", tolerating "their"/"there" mismatch
-        assert!(start >= 2);
-        assert!(end >= 2);
+        assert!(result.overlap_start_source >= 2);
+        assert!(result.overlap_end_target >= 2);
     }
 
     #[test]
@@ -554,10 +625,10 @@ mod tests {
         let target = s(&["I", "scream", "for", "more"]);
         let result = semi_global_align(&source, &target, ScoringParams::default());
         // Might find overlap on "I" only, or none if penalties outweigh
-        if let Some((start, end)) = result {
+        if let Some(r) = result {
             // If overlap found, verify it makes sense
-            assert!(start <= source.len());
-            assert!(end <= target.len());
+            assert!(r.overlap_start_source <= source.len());
+            assert!(r.overlap_end_target <= target.len());
         }
     }
 
@@ -574,15 +645,17 @@ mod tests {
         ]);
         // "taking" → "taken" (tense error common in ASR)
         let scoring = ScoringParams::new(2.0, -1.0);
-        let result = semi_global_align(&prev, &new, scoring);
-        assert!(result.is_some());
-        let (start, end) = result.unwrap();
+        let result = semi_global_align(&prev, &new, scoring).unwrap();
         // Should align on "better", "after"
-        assert_eq!(start, 4); // "better" is at index 4 in prev
-        assert!(end >= 2);    // Should include at least "better", "after"
+        assert_eq!(result.overlap_start_source, 4); // "better" is at index 4 in prev
+        assert!(result.overlap_end_target >= 2);    // Should include at least "better", "after"
 
-        // Verify merge produces reasonable result
-        let merged: Vec<_> = prev[..start].iter().chain(new.iter()).cloned().collect();
+        // Verify merge produces reasonable result using first_match
+        let merged: Vec<_> = prev[..result.first_match_source]
+            .iter()
+            .chain(new[result.first_match_target..].iter())
+            .cloned()
+            .collect();
         assert_eq!(
             &merged[..4],
             &s(&["the", "patient", "reported", "feeling"])[..]
@@ -599,8 +672,11 @@ mod tests {
         let target = s(&[
             "over", "the", "lazy", "dog", "and", "runs", "away",
         ]);
-        let result = semi_global_align(&source, &target, ScoringParams::default());
-        assert_eq!(result, Some((5, 3)));
+        let result = semi_global_align(&source, &target, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 5);
+        assert_eq!(result.overlap_end_target, 3);
+        assert_eq!(result.first_match_source, 5);
+        assert_eq!(result.first_match_target, 0);
         // source[5..] = ["over", "the", "lazy"] matches target[..3]
     }
 
@@ -613,19 +689,72 @@ mod tests {
         let new_transcript = s(&[
             "is", "going", "to", "be", "nice", "tomorrow",
         ]);
-        let result = semi_global_align(&prev_transcript, &new_transcript, ScoringParams::default());
-        assert_eq!(result, Some((5, 3)));
+        let result = semi_global_align(&prev_transcript, &new_transcript, ScoringParams::default()).unwrap();
+        assert_eq!(result.overlap_start_source, 5);
+        assert_eq!(result.overlap_end_target, 3);
+        assert_eq!(result.first_match_source, 5);
+        assert_eq!(result.first_match_target, 0);
         // prev[5..] = ["is", "going", "to"] matches new[..3]
 
-        let (start, _) = result.unwrap();
-        let merged: Vec<_> = prev_transcript[..start]
+        let merged: Vec<_> = prev_transcript[..result.first_match_source]
             .iter()
-            .chain(new_transcript.iter())
+            .chain(new_transcript[result.first_match_target..].iter())
             .cloned()
             .collect();
         assert_eq!(
             merged,
             s(&["I", "think", "that", "the", "weather", "is", "going", "to", "be", "nice", "tomorrow"])
         );
+    }
+
+    // ==================== First Match Tracking Tests ====================
+
+    #[test]
+    fn first_match_with_garbled_first_word() {
+        // Simulating audio cutoff mid-word: "brown" becomes "wn" in new transcript
+        // source: ["The", "quick", "brown", "fox"]
+        // target: ["wn", "fox", "jumps"]  ("wn" is garbled/truncated "brown")
+        // The overlap should find "fox" as the first clean match
+        let source = s(&["The", "quick", "brown", "fox"]);
+        let target = s(&["wn", "fox", "jumps"]);
+        let scoring = ScoringParams::new(2.0, -1.0); // Higher match reward to tolerate gap
+        let result = semi_global_align(&source, &target, scoring).unwrap();
+
+        // Overlap starts at "fox" (index 3) since "wn" doesn't match
+        assert_eq!(result.overlap_start_source, 3);
+        assert_eq!(result.first_match_source, 3);
+        assert_eq!(result.first_match_target, 1); // "fox" is at index 1 in target
+
+        // Merge using first_match: source[..3] + target[1..] = ["The", "quick", "brown"] + ["fox", "jumps"]
+        let merged: Vec<_> = source[..result.first_match_source]
+            .iter()
+            .chain(target[result.first_match_target..].iter())
+            .cloned()
+            .collect();
+        assert_eq!(merged, s(&["The", "quick", "brown", "fox", "jumps"]));
+    }
+
+    #[test]
+    fn first_match_differs_from_overlap_start() {
+        // Case where there's a gap at the start of the overlap
+        // source: ["a", "b", "c", "d", "e"]
+        // target: ["x", "c", "d", "e", "f"]
+        // With gap tolerance, overlap might start before the first match
+        let source = s(&["a", "b", "c", "d", "e"]);
+        let target = s(&["x", "c", "d", "e", "f"]);
+        let scoring = ScoringParams::new(3.0, -1.0); // High match reward
+        let result = semi_global_align(&source, &target, scoring).unwrap();
+
+        // First match should be at "c"
+        assert_eq!(result.first_match_source, 2); // "c" is at index 2 in source
+        assert_eq!(result.first_match_target, 1); // "c" is at index 1 in target
+
+        // Merge using first_match preserves clean word boundaries
+        let merged: Vec<_> = source[..result.first_match_source]
+            .iter()
+            .chain(target[result.first_match_target..].iter())
+            .cloned()
+            .collect();
+        assert_eq!(merged, s(&["a", "b", "c", "d", "e", "f"]));
     }
 }

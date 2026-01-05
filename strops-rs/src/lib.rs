@@ -7,8 +7,9 @@ use alignment::{semi_global_align, ScoringParams};
 /// Merge two token sequences by finding their overlap.
 ///
 /// Uses semi-global alignment to find where the suffix of `prev` overlaps
-/// with the prefix of `new`, then merges them by keeping prev's non-overlapping
-/// prefix followed by all of new.
+/// with the prefix of `new`. Merges by stitching at the first matching token,
+/// which handles cases where the first token in `new` may be garbled due to
+/// audio cutoff.
 ///
 /// Args:
 ///     prev: The previous sequence of tokens.
@@ -23,11 +24,13 @@ use alignment::{semi_global_align, ScoringParams};
 #[pyfunction]
 #[pyo3(text_signature = "(prev, new)")]
 fn merge_by_overlap(prev: Vec<String>, new: Vec<String>) -> PyResult<Vec<String>> {
-    match semi_global_align(&prev, &new, ScoringParams::default().with_match_reward(3.0)) {
-        Some((overlap_start, _)) => {
-            let mut result: Vec<String> = prev[..overlap_start].to_vec();
-            result.extend(new);
-            Ok(result)
+    match semi_global_align(&prev, &new, ScoringParams::with_match_reward(3.0)) {
+        Some(result) => {
+            // Stitch at first match: take prev up to first match, then new from first match onward.
+            // This handles garbled first tokens in new (e.g., from audio cutoff mid-word).
+            let mut merged: Vec<String> = prev[..result.first_match_source].to_vec();
+            merged.extend(new[result.first_match_target..].iter().cloned());
+            Ok(merged)
         }
         None => {
             // No overlap found, concatenate
