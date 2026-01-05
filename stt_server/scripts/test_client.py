@@ -2,18 +2,18 @@
 """Sample WebSocket client for testing the STT server.
 
 Usage:
-    python scripts/test_client.py <audio_file>
+    python -m stt_server.scripts.test_client <audio_file>
 
 Supports WAV, FLAC, MP3, OGG, and other formats via librosa.
 Audio is automatically resampled to 16kHz mono.
 """
 
-import argparse
 import asyncio
 import base64
 import json
 from pathlib import Path
 
+import click
 import librosa
 import numpy as np
 import websockets
@@ -106,35 +106,22 @@ async def send_audio_file(uri: str, audio_path: Path, chunk_ms: int = 32):
     print("\nDone.")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Test client for STT WebSocket server"
-    )
-    parser.add_argument(
-        "audio_file",
-        type=Path,
-        help="Path to audio file (WAV, FLAC, MP3, OGG, etc.)",
-    )
-    parser.add_argument(
-        "--uri",
-        default="ws://localhost:15751/ws/transcribe",
-        help="WebSocket URI (default: ws://localhost:15751/ws/transcribe)",
-    )
-    parser.add_argument(
-        "--chunk-ms",
-        type=int,
-        default=32,
-        help="Chunk size in milliseconds (default: 32)",
-    )
-    args = parser.parse_args()
-
-    if not args.audio_file.exists():
-        print(f"Error: File not found: {args.audio_file}")
-        return 1
-
-    asyncio.run(send_audio_file(args.uri, args.audio_file, args.chunk_ms))
-    return 0
+@click.command()
+@click.argument("audio_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--uri",
+    default="ws://localhost:15751/ws/transcribe",
+    help="WebSocket URI",
+)
+@click.option(
+    "--chunk-ms",
+    default=32,
+    help="Chunk size in milliseconds",
+)
+def main(audio_file: Path, uri: str, chunk_ms: int):
+    """Send an audio file to the STT server for transcription."""
+    asyncio.run(send_audio_file(uri, audio_file, chunk_ms))
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()
