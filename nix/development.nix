@@ -49,6 +49,7 @@ in {
             pydantic
             pysilero-vad
             strops
+            websockets
           ]
         ))
 
