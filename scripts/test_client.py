@@ -2,22 +2,23 @@
 """Sample WebSocket client for testing the STT server.
 
 Usage:
-    python scripts/test_client.py <audio_file.wav>
+    python scripts/test_client.py <audio_file>
 
-The audio file should be:
-    - WAV format
-    - 16kHz sample rate (will resample if different)
-    - Mono channel (will convert if stereo)
+Supports WAV, FLAC, MP3, OGG, and other formats via librosa.
+Audio is automatically resampled to 16kHz mono.
 """
 
 import argparse
 import asyncio
 import base64
 import json
-import wave
 from pathlib import Path
 
+import librosa
+import numpy as np
 import websockets
+
+TARGET_SAMPLE_RATE = 16000
 
 
 async def send_audio_file(uri: str, audio_path: Path, chunk_ms: int = 32):
@@ -25,31 +26,26 @@ async def send_audio_file(uri: str, audio_path: Path, chunk_ms: int = 32):
 
     Args:
         uri: WebSocket URI (e.g., ws://localhost:8000/ws/transcribe)
-        audio_path: Path to the WAV audio file
+        audio_path: Path to the audio file (WAV, FLAC, MP3, etc.)
         chunk_ms: Chunk size in milliseconds (default: 32ms)
     """
-    # Read the WAV file
-    with wave.open(str(audio_path), "rb") as wav:
-        sample_rate = wav.getframerate()
-        channels = wav.getnchannels()
-        sample_width = wav.getsampwidth()
-        n_frames = wav.getnframes()
-        audio_data = wav.readframes(n_frames)
+    # Load audio file with librosa (resamples to target rate, converts to mono)
+    audio, original_sr = librosa.load(
+        str(audio_path), sr=TARGET_SAMPLE_RATE, mono=True
+    )
 
     print(f"Audio file: {audio_path}")
-    print(f"  Sample rate: {sample_rate} Hz")
-    print(f"  Channels: {channels}")
-    print(f"  Sample width: {sample_width} bytes")
-    print(f"  Duration: {n_frames / sample_rate:.2f}s")
+    print(f"  Original sample rate: {original_sr} Hz (resampled to {TARGET_SAMPLE_RATE} Hz)")
+    print(f"  Duration: {len(audio) / TARGET_SAMPLE_RATE:.2f}s")
     print()
 
-    if sample_width != 2:
-        print(f"Warning: Expected 16-bit audio, got {sample_width * 8}-bit")
+    # Convert float32 [-1, 1] to int16 bytes
+    audio_int16 = (audio * 32767).astype(np.int16)
+    audio_data = audio_int16.tobytes()
 
-    # Calculate chunk size in bytes
-    bytes_per_sample = sample_width * channels
-    samples_per_chunk = int(sample_rate * chunk_ms / 1000)
-    chunk_bytes = samples_per_chunk * bytes_per_sample
+    # Calculate chunk size in bytes (16-bit mono = 2 bytes per sample)
+    samples_per_chunk = int(TARGET_SAMPLE_RATE * chunk_ms / 1000)
+    chunk_bytes = samples_per_chunk * 2
 
     async with websockets.connect(uri) as ws:
         print(f"Connected to {uri}")
@@ -87,8 +83,8 @@ async def send_audio_file(uri: str, audio_path: Path, chunk_ms: int = 32):
             # Create AudioFrame message
             frame = {
                 "samples": base64.b64encode(chunk).decode("ascii"),
-                "sampleRate": sample_rate,
-                "channels": channels,
+                "sampleRate": TARGET_SAMPLE_RATE,
+                "channels": 1,
             }
             await ws.send(json.dumps(frame))
             chunks_sent += 1
@@ -117,7 +113,7 @@ def main():
     parser.add_argument(
         "audio_file",
         type=Path,
-        help="Path to WAV audio file",
+        help="Path to audio file (WAV, FLAC, MP3, OGG, etc.)",
     )
     parser.add_argument(
         "--uri",
