@@ -101,15 +101,23 @@ This document tracks the implementation progress of the STT server pipeline.
 
 - [x] **4.1** Create `PipelineSession` in `session.py`
   - Implements `TranscriptionSession`
-  - Creates and manages `VAD + ASR` pipeline
-  - Wires ASR output to segment queue
+  - Creates and manages `VAD + ASR + Sink` pipeline
+  - Pipeline sends segments directly to WebSocket (no intermediate queue)
 
-- [x] **4.2** Update `create_session()` to use `PipelineSession`
+- [x] **4.2** Simplify `TranscriptionSession` interface
+  - Removed `get_segment()` - pipeline handles WebSocket sending
+  - Only `push_audio()` and `close()` remain
+
+- [x] **4.3** Update `server.py`
+  - Removed `segment_sender` task
+  - Server just pushes audio; pipeline handles output
+
+- [x] **4.4** Update `create_session()` to accept WebSocket
   - Uses shared VAD and model instances (lazy initialization)
   - Configurable VAD parameters (small_gap, large_gap, min_speech)
 
-- [x] **4.3** Write unit tests for PipelineSession
-  - 5 tests covering push/get, close, shutdown, multiple turns
+- [x] **4.5** Write unit tests for PipelineSession
+  - 4 tests covering WebSocket output, close, multiple turns
 
 ---
 

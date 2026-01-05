@@ -11,8 +11,6 @@ WebSocket Protocol:
     5. Client disconnects when done
 """
 
-import asyncio
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from loguru import logger
 from pydantic import ValidationError
@@ -45,18 +43,7 @@ async def websocket_transcribe(websocket: WebSocket):
     disconnects when they no longer need the service.
     """
     await websocket.accept()
-    session = create_session()
-
-    # Task to wait for and send transcription segments
-    async def segment_sender():
-        try:
-            while True:
-                segment = await session.get_segment()
-                await websocket.send_json(segment.model_dump(by_alias=True))
-        except asyncio.CancelledError:
-            pass
-
-    sender_task = asyncio.create_task(segment_sender())
+    session = create_session(websocket)
 
     try:
         while True:
@@ -83,9 +70,4 @@ async def websocket_transcribe(websocket: WebSocket):
         except Exception:
             pass
     finally:
-        _ = sender_task.cancel()
-        try:
-            await sender_task
-        except asyncio.CancelledError:
-            pass
         await session.close()

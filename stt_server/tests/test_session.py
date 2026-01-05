@@ -1,10 +1,9 @@
 """Unit tests for PipelineSession."""
 
-import asyncio
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from stt_server.data_types import AudioFrame, TranscriptionSegment
+from stt_server.data_types import AudioFrame
 from stt_server.session import PipelineSession
 
 
@@ -18,8 +17,11 @@ def make_audio_frame(duration_ms: int = 32, sample_rate: int = 16000) -> AudioFr
 class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
     """Tests for PipelineSession."""
 
-    async def test_push_audio_and_get_segment(self):
-        """PipelineSession should emit segments when VAD detects speech."""
+    async def test_sends_segments_to_websocket(self):
+        """PipelineSession should send segments to WebSocket when VAD detects speech."""
+        mock_websocket = MagicMock()
+        mock_websocket.send_json = AsyncMock()
+
         mock_vad = MagicMock()
         mock_vad.chunk_bytes.return_value = 1024
         mock_vad.chunk_samples.return_value = 512
@@ -30,6 +32,7 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
         mock_model.transcribe.return_value = "hello world"
 
         session = PipelineSession(
+            websocket=mock_websocket,
             vad=mock_vad,
             model=mock_model,
             large_gap_seconds=0.1,  # 1600 samples = ~3 chunks of silence
@@ -40,15 +43,21 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
         for _ in range(5):
             await session.push_audio(make_audio_frame())
 
-        # Should get transcription segments (tentative then final)
-        segment = await asyncio.wait_for(session.get_segment(), timeout=1.0)
-        self.assertIsInstance(segment, TranscriptionSegment)
-        self.assertIn("hello", segment.text.lower())
-
         await session.close()
+
+        # WebSocket should have received segments
+        self.assertTrue(mock_websocket.send_json.called)
+
+        # Check that at least one segment contains "hello"
+        calls = mock_websocket.send_json.call_args_list
+        texts = [call[0][0].get("text", "") for call in calls]
+        self.assertTrue(any("hello" in text.lower() for text in texts))
 
     async def test_close_shuts_down_pipeline(self):
         """close() should shut down the pipeline gracefully."""
+        mock_websocket = MagicMock()
+        mock_websocket.send_json = AsyncMock()
+
         mock_vad = MagicMock()
         mock_vad.chunk_bytes.return_value = 1024
         mock_vad.chunk_samples.return_value = 512
@@ -57,7 +66,11 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
         mock_model = MagicMock()
         mock_model.transcribe.return_value = ""
 
-        session = PipelineSession(vad=mock_vad, model=mock_model)
+        session = PipelineSession(
+            websocket=mock_websocket,
+            vad=mock_vad,
+            model=mock_model,
+        )
 
         # Push some audio
         await session.push_audio(make_audio_frame())
@@ -70,6 +83,9 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
 
     async def test_push_after_close_is_ignored(self):
         """push_audio() after close() should be ignored."""
+        mock_websocket = MagicMock()
+        mock_websocket.send_json = AsyncMock()
+
         mock_vad = MagicMock()
         mock_vad.chunk_bytes.return_value = 1024
         mock_vad.chunk_samples.return_value = 512
@@ -77,38 +93,21 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
 
         mock_model = MagicMock()
 
-        session = PipelineSession(vad=mock_vad, model=mock_model)
+        session = PipelineSession(
+            websocket=mock_websocket,
+            vad=mock_vad,
+            model=mock_model,
+        )
         await session.close()
 
         # Should not raise
         await session.push_audio(make_audio_frame())
 
-    async def test_get_segment_raises_on_shutdown(self):
-        """get_segment() should raise CancelledError when pipeline shuts down."""
-        mock_vad = MagicMock()
-        mock_vad.chunk_bytes.return_value = 1024
-        mock_vad.chunk_samples.return_value = 512
-        mock_vad.return_value = 0.1  # No speech
-
-        mock_model = MagicMock()
-
-        session = PipelineSession(vad=mock_vad, model=mock_model)
-
-        # Start waiting for segment in background
-        get_task = asyncio.create_task(session.get_segment())
-
-        # Give the task a chance to start waiting
-        await asyncio.sleep(0.01)
-
-        # Close the session
-        await session.close()
-
-        # get_segment should raise CancelledError
-        with self.assertRaises(asyncio.CancelledError):
-            await get_task
-
     async def test_multiple_turns(self):
         """Session should handle multiple speech turns."""
+        mock_websocket = MagicMock()
+        mock_websocket.send_json = AsyncMock()
+
         mock_vad = MagicMock()
         mock_vad.chunk_bytes.return_value = 1024
         mock_vad.chunk_samples.return_value = 512
@@ -119,6 +118,7 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
         mock_model.transcribe.side_effect = ["first turn", "second turn"]
 
         session = PipelineSession(
+            websocket=mock_websocket,
             vad=mock_vad,
             model=mock_model,
             large_gap_seconds=0.05,  # ~800 samples = ~2 chunks
@@ -129,21 +129,19 @@ class TestPipelineSession(unittest.IsolatedAsyncioTestCase):
         for _ in range(8):
             await session.push_audio(make_audio_frame())
 
-        # First turn: tentative segment then final
-        segment1 = await asyncio.wait_for(session.get_segment(), timeout=1.0)
-        self.assertIn("first", segment1.text.lower())
-
-        final1 = await asyncio.wait_for(session.get_segment(), timeout=1.0)
-        self.assertTrue(final1.is_end_of_turn)
-
-        # Second turn: tentative then final
-        segment2 = await asyncio.wait_for(session.get_segment(), timeout=1.0)
-        self.assertIn("second", segment2.text.lower())
-
-        final2 = await asyncio.wait_for(session.get_segment(), timeout=1.0)
-        self.assertTrue(final2.is_end_of_turn)
-
         await session.close()
+
+        # WebSocket should have received segments from both turns
+        calls = mock_websocket.send_json.call_args_list
+        texts = [call[0][0].get("text", "") for call in calls]
+
+        # Should have segments containing "first" and "second"
+        self.assertTrue(any("first" in text.lower() for text in texts))
+        self.assertTrue(any("second" in text.lower() for text in texts))
+
+        # Should have end-of-turn segments
+        end_of_turns = [call[0][0].get("isEndOfTurn", False) for call in calls]
+        self.assertGreaterEqual(sum(end_of_turns), 2)
 
 
 if __name__ == "__main__":
