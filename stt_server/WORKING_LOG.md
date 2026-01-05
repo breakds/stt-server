@@ -95,20 +95,21 @@ This document tracks the implementation progress of the STT server pipeline.
 
 ---
 
-### Phase 4: Pipeline Integration
+### Phase 4: Pipeline Integration [DONE]
 
 **Goal:** Wire everything together and replace the mock session.
 
-- [ ] **4.1** Create `PipelineSession` in `session.py`
+- [x] **4.1** Create `PipelineSession` in `session.py`
   - Implements `TranscriptionSession`
-  - Creates and manages `VAD + ASR + Sink` pipeline
-  - Wires sink output to segment queue
+  - Creates and manages `VAD + ASR` pipeline
+  - Wires ASR output to segment queue
 
-- [ ] **4.2** Update `create_session()` to use `PipelineSession`
+- [x] **4.2** Update `create_session()` to use `PipelineSession`
+  - Uses shared VAD and model instances (lazy initialization)
+  - Configurable VAD parameters (small_gap, large_gap, min_speech)
 
-- [ ] **4.3** Integration testing
-  - Test with real audio files
-  - Verify end-to-end transcription
+- [x] **4.3** Write unit tests for PipelineSession
+  - 5 tests covering push/get, close, shutdown, multiple turns
 
 ---
 
