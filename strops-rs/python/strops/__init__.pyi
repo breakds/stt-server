@@ -1,21 +1,21 @@
 """Type stubs for strops - Rust extension module for string operations."""
 
-def merge_transcripts(prev: list[str], new: list[str]) -> list[str]:
-    """Merge two word sequences using semi-global alignment.
+def merge_by_overlap(prev: list[str], new: list[str]) -> list[str]:
+    """Merge two token sequences by finding their overlap.
 
-    Given a previous transcript and a new transcript (from overlapped audio),
-    find the optimal alignment and merge them by keeping prev's non-overlapping
-    prefix and all of new.
+    Uses semi-global alignment to find where the suffix of `prev` overlaps
+    with the prefix of `new`, then merges them by keeping prev's non-overlapping
+    prefix followed by all of new.
 
     Args:
-        prev: The previous transcript as a list of words.
-        new: The new transcript as a list of words.
+        prev: The previous sequence of tokens.
+        new: The new sequence of tokens.
 
     Returns:
-        The merged transcript as a list of words.
+        The merged sequence. If no overlap is found, returns prev + new (concatenation).
 
     Example:
-        >>> merge_transcripts(["The", "quick", "brown", "fox"], ["brown", "fox", "jumps"])
+        >>> merge_by_overlap(["The", "quick", "brown", "fox"], ["brown", "fox", "jumps"])
         ["The", "quick", "brown", "fox", "jumps"]
     """
     ...

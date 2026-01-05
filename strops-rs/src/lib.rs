@@ -4,27 +4,26 @@ pub mod alignment;
 
 use alignment::{semi_global_align, ScoringParams};
 
-/// Merge two word sequences using semi-global alignment.
+/// Merge two token sequences by finding their overlap.
 ///
-/// Given a previous transcript and a new transcript (from overlapped audio),
-/// find the optimal alignment and merge them by keeping prev's non-overlapping
-/// prefix and all of new.
+/// Uses semi-global alignment to find where the suffix of `prev` overlaps
+/// with the prefix of `new`, then merges them by keeping prev's non-overlapping
+/// prefix followed by all of new.
 ///
 /// Args:
-///     prev: The previous transcript as a list of words.
-///     new: The new transcript as a list of words.
+///     prev: The previous sequence of tokens.
+///     new: The new sequence of tokens.
 ///
 /// Returns:
-///     The merged transcript as a list of words. If no overlap is found,
-///     returns prev + new (concatenation).
+///     The merged sequence. If no overlap is found, returns prev + new (concatenation).
 ///
 /// Example:
-///     >>> merge_transcripts(["The", "quick", "brown", "fox"], ["brown", "fox", "jumps"])
+///     >>> merge_by_overlap(["The", "quick", "brown", "fox"], ["brown", "fox", "jumps"])
 ///     ["The", "quick", "brown", "fox", "jumps"]
 #[pyfunction]
 #[pyo3(text_signature = "(prev, new)")]
-fn merge_transcripts(prev: Vec<String>, new: Vec<String>) -> PyResult<Vec<String>> {
-    match semi_global_align(&prev, &new, ScoringParams::default()) {
+fn merge_by_overlap(prev: Vec<String>, new: Vec<String>) -> PyResult<Vec<String>> {
+    match semi_global_align(&prev, &new, ScoringParams::default().with_match_reward(3.0)) {
         Some((overlap_start, _)) => {
             let mut result: Vec<String> = prev[..overlap_start].to_vec();
             result.extend(new);
@@ -42,6 +41,6 @@ fn merge_transcripts(prev: Vec<String>, new: Vec<String>) -> PyResult<Vec<String
 #[pymodule]
 fn strops(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
-    m.add_function(wrap_pyfunction!(merge_transcripts, m)?)?;
+    m.add_function(wrap_pyfunction!(merge_by_overlap, m)?)?;
     Ok(())
 }
