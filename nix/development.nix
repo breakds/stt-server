@@ -10,7 +10,7 @@ in {
       # my-package = final.callPackage ./pkgs/my-package {};
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
-          # Add custom python packages here
+          strops = py-final.callPackage ../strops-rs/nix/default.nix {};
         })
       ];
     })
@@ -48,6 +48,7 @@ in {
             uvicorn
             pydantic
             pysilero-vad
+            strops
           ]
         ))
 
