@@ -36,8 +36,8 @@ def make_vad_chunk_frame() -> AudioFrame:
 class TestVADStageHysteresis(unittest.IsolatedAsyncioTestCase):
     """Tests for VAD hysteresis state machine."""
 
-    async def test_silence_to_speech_transition(self):
-        """State should transition from silence to speech at high threshold."""
+    async def test_inactive_to_speech_transition(self):
+        """State should transition from inactive to speech at high threshold."""
         mock_vad = MagicMock()
         mock_vad.chunk_bytes.return_value = 1024
         mock_vad.chunk_samples.return_value = 512
@@ -48,10 +48,9 @@ class TestVADStageHysteresis(unittest.IsolatedAsyncioTestCase):
             speech_to_silence_threshold=0.35,
         )
 
-        # Below threshold - should stay in silence
-        mock_vad.return_value = 0.4
+        # Below threshold - should stay inactive
         vad_stage._update_state(0.4)
-        self.assertEqual(vad_stage._state, SpeechState.SILENCE)
+        self.assertEqual(vad_stage._state, SpeechState.INACTIVE)
 
         # At threshold - should transition to speaking
         vad_stage._update_state(0.5)
@@ -92,13 +91,13 @@ class TestVADStageHysteresis(unittest.IsolatedAsyncioTestCase):
             speech_to_silence_threshold=0.35,
         )
 
-        # Start in silence, probability at 0.4 (between thresholds)
+        # Start inactive, probability at 0.4 (between thresholds)
         vad_stage._update_state(0.4)
-        self.assertEqual(vad_stage._state, SpeechState.SILENCE)
+        self.assertEqual(vad_stage._state, SpeechState.INACTIVE)
 
-        # Still at 0.4 - should stay silent
+        # Still at 0.4 - should stay inactive
         vad_stage._update_state(0.4)
-        self.assertEqual(vad_stage._state, SpeechState.SILENCE)
+        self.assertEqual(vad_stage._state, SpeechState.INACTIVE)
 
         # Jump to 0.6 - should become speaking
         vad_stage._update_state(0.6)
