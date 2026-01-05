@@ -127,70 +127,40 @@ Delivers transcription segments to the WebSocket.
 
 ## Transcript Merge Algorithm
 
-When ASR processes overlapped audio, we need to merge the new transcript with the existing one. Since Canary-Qwen-2.5B doesn't provide word timestamps, we use a word-level semi-global alignment algorithm.
+When ASR processes overlapped audio, we need to merge the new transcript with the existing one. Since Canary-Qwen-2.5B doesn't provide word timestamps, we use the `strops` package which implements a word-level semi-global alignment algorithm.
 
-### Problem Statement
+### Usage
 
-Given:
-- `prev`: Previous transcript as a list of words
-- `new`: New transcript (from overlapped audio) as a list of words
+```python
+from strops import merge_by_overlap
 
-Find the optimal alignment between a **suffix** of `prev` and a **prefix** of `new`, then merge by keeping `prev`'s non-overlapping prefix and all of `new`.
-
-**Example:**
-```
-prev: ["The", "quick", "brown", "fox", "jumps"]
-new:  ["brown", "fox", "jumps", "over", "the", "lazy", "dog"]
-
-Alignment finds: prev[-3:] ≈ new[:3]  ("brown fox jumps")
-Result: ["The", "quick"] + ["brown", "fox", "jumps", "over", "the", "lazy", "dog"]
-      = "The quick brown fox jumps over the lazy dog"
+prev = ["The", "quick", "brown", "fox"]
+new = ["brown", "fox", "jumps", "over"]
+merged = merge_by_overlap(prev, new)
+# Result: ["The", "quick", "brown", "fox", "jumps", "over"]
 ```
 
-### Semi-Global Alignment Algorithm
+### How It Works
 
-We use a DP-based semi-global alignment that:
-- Allows free gaps at the **start** of `prev` (we only care about matching a suffix)
-- Penalizes gaps elsewhere (insertions/deletions in the overlap region)
-- Finds the optimal prefix of `new` that aligns with a suffix of `prev`
+The algorithm finds the optimal alignment between a **suffix** of `prev` and a **prefix** of `new`:
 
-**DP Formulation:**
+1. **Semi-global alignment**: DP-based alignment that allows free gaps at the start of `prev` (only matches suffix), with `match_reward=3.0` and `gap_penalty=-1.0`
+2. **First-match stitching**: Tracks the first matching word position to handle garbled first words in `new` (e.g., audio cutoff mid-word)
+3. **Merge**: Returns `prev[:first_match_source] + new[first_match_target:]`
 
+**Example with garbled audio:**
 ```
-Let m = len(prev), n = len(new)
-dp[i][j] = best alignment score for prev[:i] vs new[:j]
+prev: ["The", "quick", "brown", "fox"]
+new:  ["wn", "fox", "jumps"]  # "wn" is truncated "brown" from audio cutoff
 
-Initialize:
-  dp[i][0] = 0          for all i (free to skip any prefix of prev)
-  dp[0][j] = j × gap    for j > 0 (gaps at start of new are penalized)
-
-Recurrence:
-  dp[i][j] = max(
-      dp[i-1][j-1] + score(prev[i-1], new[j-1]),  # align words
-      dp[i-1][j] + gap,                            # skip word in prev
-      dp[i][j-1] + gap                             # skip word in new
-  )
-
-Answer:
-  Find j* = argmax(dp[m][j]) for j in 0..n
-  Traceback from dp[m][j*] to find the alignment boundary
+first_match at "fox" (prev[3], new[1])
+Result: ["The", "quick", "brown"] + ["fox", "jumps"]
+      = ["The", "quick", "brown", "fox", "jumps"]
 ```
 
-**Merge Strategy:**
+If no overlap is found, returns `prev + new` (concatenation).
 
-After finding the alignment:
-1. Identify where the overlap starts in `prev` (call it index `k`)
-2. Result = `prev[:k] + new` (keep new's version for the overlapping region)
-
-### Scoring Function
-
-The `score(word_a, word_b)` function and `gap` penalty are configurable parameters. We will experiment with different schemes:
-
-- **Match/mismatch scoring:** Exact match bonus, mismatch penalty, or continuous similarity based on edit distance
-- **Gap penalty:** Constant or affine (open + extend)
-- **Word normalization:** Lowercase, strip punctuation for comparison
-
-The optimal scoring scheme will be determined empirically.
+See `strops-rs/src/alignment.rs` for implementation details.
 
 ## Session Lifecycle
 
