@@ -50,6 +50,7 @@ in {
             pysilero-vad
             strops
             websockets
+            sounddevice
           ]
         ))
 
