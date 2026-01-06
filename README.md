@@ -144,6 +144,7 @@ Add to your NixOS configuration:
     port = 15751;
     host = "0.0.0.0";
     device = "cuda";  # or "cpu"
+    openFirewall = true;  # for internal network access
   };
 }
 ```
@@ -153,6 +154,7 @@ Configuration options:
 - `host` - Bind address (default: "0.0.0.0")
 - `device` - "cuda" or "cpu" (default: "cuda")
 - `package` - The stt-server package to use
+- `openFirewall` - Open TCP port in firewall (default: false)
 
 Model weights are cached in `/var/cache/stt-server` (managed by systemd).
 

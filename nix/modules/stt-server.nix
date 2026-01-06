@@ -8,6 +8,7 @@
 #     port = 15751;
 #     host = "0.0.0.0";
 #     device = "cuda";  # or "cpu"
+#     openFirewall = true;  # for internal network access
 #   };
 { config, lib, pkgs, ... }:
 
@@ -46,9 +47,16 @@ in
       defaultText = lib.literalExpression "pkgs.stt-server";
       description = "The stt-server package to use.";
     };
+
+    openFirewall = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Open the firewall port for the STT server (TCP only).";
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
     systemd.services.stt-server = {
       description = "Speech-to-Text WebSocket Server";
       wantedBy = [ "multi-user.target" ];
