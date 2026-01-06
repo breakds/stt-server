@@ -23,8 +23,11 @@ import numpy as np
 import numpy.typing as npt
 import websockets
 from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
 from rich.prompt import IntPrompt
 from rich.table import Table
+from rich.text import Text
 from websockets.asyncio.client import ClientConnection
 
 TARGET_SAMPLE_RATE = 16000
@@ -91,7 +94,67 @@ def select_input_device() -> int:
         console.print(f"[red]Invalid choice: {choice}[/red]")
 
 
-async def receive_transcriptions(ws: ClientConnection) -> None:
+class TranscriptDisplay:
+    """Manages transcript display with rich formatting."""
+
+    def __init__(self) -> None:
+        self._final_segments: list[str] = []
+        self._tentative_text: str = ""
+        self._turn_count: int = 0
+
+    def add_segment(self, text: str, is_final: bool, is_end_of_turn: bool) -> None:
+        """Update the transcript with a new segment."""
+        if is_end_of_turn:
+            if text:
+                self._final_segments.append(text)
+            self._tentative_text = ""
+            self._turn_count += 1
+        elif is_final:
+            self._final_segments.append(text)
+            self._tentative_text = ""
+        else:
+            self._tentative_text = text
+
+    def render(self) -> Panel:
+        """Render the current transcript state."""
+        parts: list[Text] = []
+
+        # Render final segments in green/bold
+        if self._final_segments:
+            final_text = Text()
+            for i, segment in enumerate(self._final_segments):
+                if i > 0:
+                    final_text.append(" ")
+                final_text.append(segment, style="green")
+            parts.append(final_text)
+
+        # Render tentative text in dim/italic
+        if self._tentative_text:
+            tentative = Text()
+            if parts:
+                tentative.append(" ")
+            tentative.append(self._tentative_text, style="dim italic yellow")
+            parts.append(tentative)
+
+        # Combine all parts
+        if parts:
+            combined = Text()
+            for part in parts:
+                combined.append_text(part)
+            content = combined
+        else:
+            content = Text("Waiting for speech...", style="dim")
+
+        title = "Transcript"
+        if self._turn_count > 0:
+            title += f" (Turn {self._turn_count})"
+
+        return Panel(content, title=title, border_style="blue")
+
+
+async def receive_transcriptions(
+    ws: ClientConnection, display: TranscriptDisplay, live: Live
+) -> None:
     """Receive and print transcription segments from the server."""
     try:
         async for message in ws:
@@ -100,14 +163,8 @@ async def receive_transcriptions(ws: ClientConnection) -> None:
             is_final = bool(segment.get("isFinal", False))
             is_end_of_turn = bool(segment.get("isEndOfTurn", False))
 
-            if is_end_of_turn:
-                print(f"\n[END OF TURN] {text}")
-                print("-" * 50)
-            elif is_final:
-                print(f"\n[FINAL] {text}")
-            else:
-                # Tentative - overwrite line
-                print(f"\r[...] {text[:80]:<80}", end="", flush=True)
+            display.add_segment(text, is_final, is_end_of_turn)
+            live.update(display.render())
     except websockets.ConnectionClosed:
         pass
 
@@ -122,6 +179,7 @@ async def stream_from_microphone(uri: str, device_id: int, chunk_ms: int = 32):
     """
     import sounddevice as sd
 
+    console = Console()
     samples_per_chunk = int(TARGET_SAMPLE_RATE * chunk_ms / 1000)
 
     # Queue for passing audio from callback to async sender
@@ -132,7 +190,7 @@ async def stream_from_microphone(uri: str, device_id: int, chunk_ms: int = 32):
     ) -> None:
         _ = frames, time  # unused
         if status:
-            print(f"Audio status: {status}")
+            console.print(f"[yellow]Audio status: {status}[/yellow]")
         # Convert float32 [-1, 1] to int16 bytes
         audio_int16: npt.NDArray[np.int16] = (indata[:, 0] * 32767).astype(np.int16)
         # Put bytes in queue (non-blocking)
@@ -142,45 +200,49 @@ async def stream_from_microphone(uri: str, device_id: int, chunk_ms: int = 32):
             pass  # Drop frames if queue is full
 
     async with websockets.connect(uri) as ws:
-        print(f"Connected to {uri}")
-        print("Recording from microphone. Press Ctrl+C to stop.")
-        print("-" * 50)
+        console.print(f"Connected to [cyan]{uri}[/cyan]")
+        console.print("[dim]Recording from microphone. Press Ctrl+C to stop.[/dim]\n")
 
-        receiver_task = asyncio.create_task(receive_transcriptions(ws))
+        display = TranscriptDisplay()
 
-        # Start audio stream
-        stream = sd.InputStream(
-            device=device_id,
-            samplerate=TARGET_SAMPLE_RATE,
-            channels=1,
-            dtype=np.float32,
-            blocksize=samples_per_chunk,
-            callback=audio_callback,
-        )
+        with Live(display.render(), console=console, refresh_per_second=10) as live:
+            receiver_task = asyncio.create_task(
+                receive_transcriptions(ws, display, live)
+            )
 
-        try:
-            with stream:
-                while True:
-                    # Get audio chunk from queue
-                    chunk = await audio_queue.get()
+            # Start audio stream
+            stream = sd.InputStream(
+                device=device_id,
+                samplerate=TARGET_SAMPLE_RATE,
+                channels=1,
+                dtype=np.float32,
+                blocksize=samples_per_chunk,
+                callback=audio_callback,
+            )
 
-                    # Send to server
-                    frame = {
-                        "samples": base64.b64encode(chunk).decode("ascii"),
-                        "sampleRate": TARGET_SAMPLE_RATE,
-                        "channels": 1,
-                    }
-                    await ws.send(json.dumps(frame))
-        except asyncio.CancelledError:
-            pass
-        finally:
-            _ = receiver_task.cancel()
             try:
-                await receiver_task
+                with stream:
+                    while True:
+                        # Get audio chunk from queue
+                        chunk = await audio_queue.get()
+
+                        # Send to server
+                        frame = {
+                            "samples": base64.b64encode(chunk).decode("ascii"),
+                            "sampleRate": TARGET_SAMPLE_RATE,
+                            "channels": 1,
+                        }
+                        await ws.send(json.dumps(frame))
             except asyncio.CancelledError:
                 pass
+            finally:
+                _ = receiver_task.cancel()
+                try:
+                    await receiver_task
+                except asyncio.CancelledError:
+                    pass
 
-    print("\nDone.")
+    console.print("\n[green]Done.[/green]")
 
 
 async def stream_from_file(uri: str, audio_path: Path, chunk_ms: int = 32):
@@ -193,15 +255,16 @@ async def stream_from_file(uri: str, audio_path: Path, chunk_ms: int = 32):
     """
     import librosa
 
+    console = Console()
+
     # Load audio file with librosa (resamples to target rate, converts to mono)
     audio, original_sr = librosa.load(
         str(audio_path), sr=TARGET_SAMPLE_RATE, mono=True
     )
 
-    print(f"Audio file: {audio_path}")
-    print(f"  Original sample rate: {original_sr} Hz (resampled to {TARGET_SAMPLE_RATE} Hz)")
-    print(f"  Duration: {len(audio) / TARGET_SAMPLE_RATE:.2f}s")
-    print()
+    console.print(f"Audio file: [cyan]{audio_path}[/cyan]")
+    console.print(f"  Sample rate: {original_sr} Hz → {TARGET_SAMPLE_RATE} Hz")
+    console.print(f"  Duration: {len(audio) / TARGET_SAMPLE_RATE:.2f}s\n")
 
     # Convert float32 [-1, 1] to int16 bytes
     audio_int16 = (audio * 32767).astype(np.int16)
@@ -212,42 +275,45 @@ async def stream_from_file(uri: str, audio_path: Path, chunk_ms: int = 32):
     chunk_bytes = samples_per_chunk * 2
 
     async with websockets.connect(uri) as ws:
-        print(f"Connected to {uri}")
-        print("-" * 50)
+        console.print(f"Connected to [cyan]{uri}[/cyan]\n")
 
-        receiver_task = asyncio.create_task(receive_transcriptions(ws))
+        display = TranscriptDisplay()
 
-        # Send audio in chunks
-        offset = 0
-        chunks_sent = 0
-        while offset < len(audio_data):
-            chunk = audio_data[offset : offset + chunk_bytes]
-            offset += chunk_bytes
+        with Live(display.render(), console=console, refresh_per_second=10) as live:
+            receiver_task = asyncio.create_task(
+                receive_transcriptions(ws, display, live)
+            )
 
-            # Create AudioFrame message
-            frame = {
-                "samples": base64.b64encode(chunk).decode("ascii"),
-                "sampleRate": TARGET_SAMPLE_RATE,
-                "channels": 1,
-            }
-            await ws.send(json.dumps(frame))
-            chunks_sent += 1
+            # Send audio in chunks
+            offset = 0
+            chunks_sent = 0
+            while offset < len(audio_data):
+                chunk = audio_data[offset : offset + chunk_bytes]
+                offset += chunk_bytes
 
-            # Simulate real-time streaming
-            await asyncio.sleep(chunk_ms / 1000)
+                # Create AudioFrame message
+                frame = {
+                    "samples": base64.b64encode(chunk).decode("ascii"),
+                    "sampleRate": TARGET_SAMPLE_RATE,
+                    "channels": 1,
+                }
+                await ws.send(json.dumps(frame))
+                chunks_sent += 1
 
-        print(f"\nSent {chunks_sent} chunks ({len(audio_data)} bytes)")
+                # Simulate real-time streaming
+                await asyncio.sleep(chunk_ms / 1000)
 
-        # Wait a bit for final transcriptions
-        await asyncio.sleep(2.0)
+            # Wait a bit for final transcriptions
+            await asyncio.sleep(2.0)
 
-        _ = receiver_task.cancel()
-        try:
-            await receiver_task
-        except asyncio.CancelledError:
-            pass
+            _ = receiver_task.cancel()
+            try:
+                await receiver_task
+            except asyncio.CancelledError:
+                pass
 
-    print("\nDone.")
+    console.print(f"\n[dim]Sent {chunks_sent} chunks ({len(audio_data)} bytes)[/dim]")
+    console.print("[green]Done.[/green]")
 
 
 @click.command()
