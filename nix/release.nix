@@ -24,7 +24,12 @@ in
     self.overlays.dev
     # Add stt-server package
     (final: prev: {
-      stt-server = final.callPackage ./packages/stt-server.nix {};
+      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+        (py-final: py-prev: {
+          stt-server = final.callPackage ./pkgs/stt-server.nix {};          
+        })
+      ];
+      stt-server = with final.python3Packages; toPythonApplication stt-server;
     })
   ];
 
@@ -33,8 +38,17 @@ in
   flake.nixosModules.stt-server = import ./modules/stt-server.nix;
 
   # Expose the package in flake outputs
-  # Uses pkgs-dev which has all required overlays applied
-  perSystem = { system, pkgs-dev, ... }: {
-    packages.stt-server = pkgs-dev.callPackage ./packages/stt-server.nix {};
+  perSystem = { system, pkgs, ... }: {
+    _module.args.pkgs = import nixpkgs {
+      inherit system;
+      config = {
+        allowUnfree = true;
+        cudaSupport = true;
+        cudaForwardCompat = true;
+        cudaCapabilities = [ "7.5" "8.6" "8.9" "12.0" ];
+      };
+      overlays = [ self.overlays.default ];
+    };
+    packages.default = pkgs.stt-server;
   };
 }
