@@ -115,7 +115,7 @@ async def send_audio_file(uri: str, audio_path: Path, chunk_ms: int = 32):
 )
 @click.option(
     "--chunk-ms",
-    default=32,
+    default=10,
     help="Chunk size in milliseconds",
 )
 def main(audio_file: Path, uri: str, chunk_ms: int):

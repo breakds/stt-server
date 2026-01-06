@@ -11,18 +11,32 @@ WebSocket Protocol:
     5. Client disconnects when done
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import click
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from loguru import logger
 from pydantic import ValidationError
 
 from stt_server.data_types import AudioFrame, ErrorResponse
-from stt_server.session import create_session
+from stt_server.session import create_session, init_shared_resources
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Load models at startup to avoid delays on first connection."""
+    logger.info("Loading VAD and ASR models...")
+    init_shared_resources()
+    logger.info("Models loaded successfully")
+    yield
+
 
 app = FastAPI(
     title="STT Server",
     description="Speech-to-Text WebSocket service for conversational agents",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 

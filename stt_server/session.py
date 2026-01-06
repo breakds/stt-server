@@ -92,22 +92,33 @@ class PipelineSession(TranscriptionSession):
         await self._pipeline.join()
 
 
-# Global shared resources (initialized lazily)
+# Global shared resources (initialized at startup via init_shared_resources)
 _shared_vad: SileroVoiceActivityDetector | None = None
 _shared_model: CanaryQwen | None = None
 
 
-def _get_shared_vad() -> SileroVoiceActivityDetector:
-    global _shared_vad
+def init_shared_resources() -> None:
+    """Initialize shared VAD and ASR model at startup.
+
+    Call this before accepting connections to avoid timeout during
+    model loading on the first request.
+    """
+    global _shared_vad, _shared_model
     if _shared_vad is None:
         _shared_vad = SileroVoiceActivityDetector()
+    if _shared_model is None:
+        _shared_model = CanaryQwen()
+
+
+def _get_shared_vad() -> SileroVoiceActivityDetector:
+    if _shared_vad is None:
+        raise RuntimeError("Shared resources not initialized. Call init_shared_resources() first.")
     return _shared_vad
 
 
 def _get_shared_model() -> CanaryQwen:
-    global _shared_model
     if _shared_model is None:
-        _shared_model = CanaryQwen()
+        raise RuntimeError("Shared resources not initialized. Call init_shared_resources() first.")
     return _shared_model
 
 
