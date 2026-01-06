@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import Base64Bytes, BaseModel, ConfigDict
 
 
 def snake_to_camel(snake_str: str) -> str:
@@ -33,12 +33,12 @@ class AudioFrame(Protocol):
     in a streaming fashion.
 
     Attributes:
-        samples: Raw PCM audio bytes (16-bit signed, serialized as base64).
+        samples: Raw PCM audio bytes (16-bit signed, base64-encoded in JSON).
         sample_rate: Sample rate in Hz (e.g., 16000).
         channels: Number of audio channels (typically 1 for mono).
     """
 
-    samples: bytes
+    samples: Base64Bytes
     sample_rate: int
     channels: int
 
