@@ -26,7 +26,7 @@ in
     (final: prev: {
       pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
         (py-final: py-prev: {
-          stt-server = final.callPackage ./pkgs/stt-server.nix {};          
+          stt-server = final.callPackage ./pkgs/stt-server/package.nix {};
         })
       ];
       stt-server = with final.python3Packages; toPythonApplication stt-server;
