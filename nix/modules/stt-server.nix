@@ -46,76 +46,42 @@ in
       defaultText = lib.literalExpression "pkgs.stt-server";
       description = "The stt-server package to use.";
     };
-
-    user = lib.mkOption {
-      type = lib.types.str;
-      default = "stt-server";
-      description = "User account under which stt-server runs.";
-    };
-
-    group = lib.mkOption {
-      type = lib.types.str;
-      default = "stt-server";
-      description = "Group under which stt-server runs.";
-    };
-
-    cacheDir = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/cache/stt-server";
-      description = ''
-        Directory for caching downloaded models (HuggingFace Hub cache).
-        This avoids re-downloading models on service restart.
-      '';
-    };
   };
 
   config = lib.mkIf cfg.enable {
-    users.users.${cfg.user} = {
-      isSystemUser = true;
-      group = cfg.group;
-      home = cfg.cacheDir;
-      createHome = true;
-      description = "STT Server service user";
-    };
-
-    users.groups.${cfg.group} = {};
-
     systemd.services.stt-server = {
       description = "Speech-to-Text WebSocket Server";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
 
-      environment = {
-        STT_DEVICE = cfg.device;
-        HOME = cfg.cacheDir;
-        XDG_CACHE_HOME = cfg.cacheDir;
-        HF_HOME = "${cfg.cacheDir}/huggingface";
-        TORCH_HOME = "${cfg.cacheDir}/torch";
-      };
-
       serviceConfig = {
         Type = "simple";
-        User = cfg.user;
-        Group = cfg.group;
         ExecStart = "${cfg.package}/bin/stt-server --host ${cfg.host} --port ${toString cfg.port}";
         Restart = "on-failure";
         RestartSec = "10s";
+
+        # Use systemd dynamic user with persistent cache
+        DynamicUser = true;
+        CacheDirectory = "stt-server";
+
+        # Environment for model caching
+        Environment = [
+          "STT_DEVICE=${cfg.device}"
+          "HOME=/var/cache/stt-server"
+          "XDG_CACHE_HOME=/var/cache/stt-server"
+          "HF_HOME=/var/cache/stt-server/huggingface"
+          "TORCH_HOME=/var/cache/stt-server/torch"
+        ];
 
         # Hardening
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
-        ReadWritePaths = [ cfg.cacheDir ];
 
         # Allow GPU access when using CUDA
         SupplementaryGroups = lib.optional (cfg.device == "cuda") "video";
       };
     };
-
-    # Ensure cache directory exists with correct permissions
-    systemd.tmpfiles.rules = [
-      "d ${cfg.cacheDir} 0750 ${cfg.user} ${cfg.group} -"
-    ];
   };
 }

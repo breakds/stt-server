@@ -152,7 +152,9 @@ Configuration options:
 - `port` - Server port (default: 15751)
 - `host` - Bind address (default: "0.0.0.0")
 - `device` - "cuda" or "cpu" (default: "cuda")
-- `cacheDir` - Model cache directory (default: "/var/cache/stt-server")
+- `package` - The stt-server package to use
+
+Model weights are cached in `/var/cache/stt-server` (managed by systemd).
 
 ## For Developers
 
