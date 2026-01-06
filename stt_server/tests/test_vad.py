@@ -1,6 +1,7 @@
 """Unit tests for VADStage."""
 
 import asyncio
+import base64
 import unittest
 from unittest.mock import MagicMock
 
@@ -23,8 +24,9 @@ class CollectSink(SingleStage[AudioChunk | EndOfTurnSignal, None]):
 def make_audio_frame(duration_ms: int = 32, sample_rate: int = 16000) -> AudioFrame:
     """Create a test audio frame with silence (512 samples = 32ms at 16kHz)."""
     num_samples = int(duration_ms * sample_rate / 1000)
-    # Silent audio as 16-bit signed PCM (all zeros)
-    samples = bytes(num_samples * 2)
+    # Silent audio as 16-bit signed PCM (all zeros), base64-encoded
+    raw_samples = bytes(num_samples * 2)
+    samples = base64.b64encode(raw_samples)
     return AudioFrame(samples=samples, sample_rate=sample_rate, channels=1)
 
 
