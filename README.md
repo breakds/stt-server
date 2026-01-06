@@ -131,13 +131,39 @@ Supports WAV, FLAC, MP3, OGG with automatic resampling to 16kHz mono.
 
 ### NixOS Service
 
-Add to your NixOS configuration:
+**Step 1: Add stt-server to your flake inputs**
 
 ```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    stt-server.url = "github:breakds/stt-server";
+  };
+
+  outputs = { nixpkgs, stt-server, ... }: {
+    nixosConfigurations.your-host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = { inherit stt-server; };
+      modules = [ ./configuration.nix ];
+    };
+  };
+}
+```
+
+**Step 2: Configure the service**
+
+```nix
+# configuration.nix
+{ stt-server, ... }:
+
 {
   imports = [ stt-server.nixosModules.default ];
 
   nixpkgs.overlays = [ stt-server.overlays.default ];
+
+  # Required for CUDA support
+  nixpkgs.config.cudaSupport = true;
 
   services.stt-server = {
     enable = true;
@@ -149,14 +175,17 @@ Add to your NixOS configuration:
 }
 ```
 
-Configuration options:
+**Configuration options:**
 - `port` - Server port (default: 15751)
 - `host` - Bind address (default: "0.0.0.0")
 - `device` - "cuda" or "cpu" (default: "cuda")
 - `package` - The stt-server package to use
 - `openFirewall` - Open TCP port in firewall (default: false)
 
-Model weights are cached in `/var/cache/stt-server` (managed by systemd).
+**Notes:**
+- Model weights are cached in `/var/cache/stt-server` (managed by systemd)
+- For CUDA support, ensure `nixpkgs.config.cudaSupport = true` is set
+- After adding `openFirewall = true`, you may need to run `sudo systemctl restart firewall` for the port to open
 
 ## For Developers
 
