@@ -79,8 +79,16 @@ in
         ProtectSystem = "strict";
         ProtectHome = true;
 
-        # Allow GPU access when using CUDA
-        SupplementaryGroups = lib.optional (cfg.device == "cuda") "video";
+        # GPU access: deny all devices by default, then allowlist NVIDIA
+        PrivateDevices = cfg.device != "cuda";
+      } // lib.optionalAttrs (cfg.device == "cuda") {
+        DevicePolicy = "closed";
+        DeviceAllow = [
+          "char-nvidiactl"
+          "char-nvidia-caps"
+          "char-nvidia-frontend"
+          "char-nvidia-uvm"
+        ];
       };
     };
   };
