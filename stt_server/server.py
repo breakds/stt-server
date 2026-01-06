@@ -26,8 +26,11 @@ from stt_server.session import create_session, init_shared_resources
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Load models at startup to avoid delays on first connection."""
-    logger.info("Loading VAD and ASR models...")
-    init_shared_resources()
+    import os
+
+    device = os.environ.get("STT_DEVICE", "cuda")
+    logger.info(f"Loading VAD and ASR models on {device}...")
+    init_shared_resources(device=device)
     logger.info("Models loaded successfully")
     yield
 

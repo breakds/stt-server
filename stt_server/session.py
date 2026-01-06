@@ -97,17 +97,20 @@ _shared_vad: SileroVoiceActivityDetector | None = None
 _shared_model: CanaryQwen | None = None
 
 
-def init_shared_resources() -> None:
+def init_shared_resources(device: str = "cuda") -> None:
     """Initialize shared VAD and ASR model at startup.
 
     Call this before accepting connections to avoid timeout during
     model loading on the first request.
+
+    Args:
+        device: Device for ASR model ('cuda' or 'cpu'). Default: 'cuda'.
     """
     global _shared_vad, _shared_model
     if _shared_vad is None:
         _shared_vad = SileroVoiceActivityDetector()
     if _shared_model is None:
-        _shared_model = CanaryQwen()
+        _shared_model = CanaryQwen(device=device)
 
 
 def _get_shared_vad() -> SileroVoiceActivityDetector:

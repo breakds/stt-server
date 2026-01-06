@@ -201,6 +201,7 @@ class VADStage(SingleStage[AudioFrame, AudioChunk | EndOfTurnSignal]):
     @override
     async def _process_item(self, item: AudioFrame) -> None:
         """Process an audio frame through VAD and emit chunks as needed."""
+        print(item)
         if item.sample_rate != self._sample_rate:
             logger.error(f"Require 16kHz, but got {item.sample_rate} Hz")
 
