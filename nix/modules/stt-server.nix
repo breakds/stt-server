@@ -73,11 +73,27 @@ in
           "TORCH_HOME=/var/cache/stt-server/torch"
         ];
 
-        # Hardening
+        # Hardening (following ollama's pattern)
+        CapabilityBoundingSet = [ "" ];
+        LockPersonality = true;
         NoNewPrivileges = true;
         PrivateTmp = true;
-        ProtectSystem = "strict";
+        PrivateUsers = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
         ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProtectSystem = "strict";
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+        UMask = "0077";
 
         # GPU access: deny all devices by default, then allowlist NVIDIA
         PrivateDevices = cfg.device != "cuda";
