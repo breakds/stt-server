@@ -4,8 +4,8 @@ from enum import Enum
 from typing import NamedTuple, override
 from collections import deque
 
-from pysilero_vad import SileroVoiceActivityDetector
 from loguru import logger
+from pysilero_vad import SileroVoiceActivityDetector
 
 from stt_server.data_types import AudioChunk, AudioFrame, EndOfTurnSignal
 from stt_server.pipeline import SingleStage
@@ -173,7 +173,7 @@ class VADStage(SingleStage[AudioFrame, AudioChunk | EndOfTurnSignal]):
         speech_to_silence_threshold: float = 0.35,
         small_gap_seconds: float = 0.3,
         large_gap_seconds: float = 1.5,
-        min_speech_seconds: float = 3.0,
+        min_speech_seconds: float = 1.0,
         max_buffer_seconds: float = 20.0,
         max_leading_silence_seconds: float = 3.0,
     ):
@@ -202,7 +202,8 @@ class VADStage(SingleStage[AudioFrame, AudioChunk | EndOfTurnSignal]):
     async def _process_item(self, item: AudioFrame) -> None:
         """Process an audio frame through VAD and emit chunks as needed."""
         if item.sample_rate != self._sample_rate:
-            logger.error(f"Require 16kHz, but got {item.sample_rate} Hz")
+            logger.error(f"Require 16kHz audio, but got {item.sample_rate} Hz")
+            return
 
         self._vad_buffer.extend(item.samples)
 

@@ -3,7 +3,6 @@
 from typing import override
 
 import numpy as np
-
 from strops import merge_by_overlap
 
 from nemo_lite import CanaryQwen

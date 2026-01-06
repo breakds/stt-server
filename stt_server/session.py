@@ -59,9 +59,9 @@ class PipelineSession(TranscriptionSession):
         vad: SileroVoiceActivityDetector,
         model: CanaryQwen,
         *,
-        small_gap_seconds: float = 0.8,
+        small_gap_seconds: float = 0.3,
         large_gap_seconds: float = 1.5,
-        min_speech_seconds: float = 3.0,
+        min_speech_seconds: float = 1.0,
     ):
         self._closed = False
 
