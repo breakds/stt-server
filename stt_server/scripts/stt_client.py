@@ -15,6 +15,7 @@ Audio is automatically resampled to 16kHz mono.
 import asyncio
 import base64
 import json
+import queue
 from pathlib import Path
 from typing import Any
 
@@ -182,21 +183,23 @@ async def stream_from_microphone(uri: str, device_id: int, chunk_ms: int = 32):
     console = Console()
     samples_per_chunk = int(TARGET_SAMPLE_RATE * chunk_ms / 1000)
 
-    # Queue for passing audio from callback to async sender
-    audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
+    # Thread-safe queue for passing audio from callback to async sender
+    # (sounddevice callback runs in a different thread)
+    thread_queue: queue.Queue[bytes] = queue.Queue()
 
     def audio_callback(
         indata: npt.NDArray[np.float32], frames: int, time: Any, status: Any
     ) -> None:
         _ = frames, time  # unused
         if status:
-            console.print(f"[yellow]Audio status: {status}[/yellow]")
+            # Note: can't use console.print here (not thread-safe)
+            print(f"Audio status: {status}")
         # Convert float32 [-1, 1] to int16 bytes
         audio_int16: npt.NDArray[np.int16] = (indata[:, 0] * 32767).astype(np.int16)
-        # Put bytes in queue (non-blocking)
+        # Put bytes in thread-safe queue (non-blocking)
         try:
-            audio_queue.put_nowait(audio_int16.tobytes())
-        except asyncio.QueueFull:
+            thread_queue.put_nowait(audio_int16.tobytes())
+        except queue.Full:
             pass  # Drop frames if queue is full
 
     async with websockets.connect(uri) as ws:
@@ -223,8 +226,13 @@ async def stream_from_microphone(uri: str, device_id: int, chunk_ms: int = 32):
             try:
                 with stream:
                     while True:
-                        # Get audio chunk from queue
-                        chunk = await audio_queue.get()
+                        # Poll thread-safe queue without blocking event loop
+                        try:
+                            chunk = thread_queue.get_nowait()
+                        except queue.Empty:
+                            # No audio ready, yield to event loop briefly
+                            await asyncio.sleep(0.001)
+                            continue
 
                         # Send to server
                         frame = {
