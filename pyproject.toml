@@ -1,0 +1,88 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stt-server"
+version = "0.8.0"
+description = "Real-time Speech-to-Text WebSocket server for conversational agents"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    # Core ML
+    "numpy",
+    "torch",
+    "torchaudio",
+    "transformers",
+    "peft",
+    "safetensors",
+    "librosa",
+    # Server
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "websockets",
+    "loguru",
+    "click",
+    # Client
+    "rich",
+    # VAD
+    "pysilero-vad",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/breakds/stt-server"
+Repository = "https://github.com/breakds/stt-server"
+
+[project.scripts]
+stt-server = "stt_server.server:main"
+stt-client = "stt_server.scripts.stt_client:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["stt_server", "nemo_lite"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/stt_server",
+    "/nemo_lite",
+    "/strops-rs",
+    "/examples",
+    "/exploration",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+exclude = [
+    "*.pyc",
+    "__pycache__",
+    ".git",
+    ".env",
+    "*.db",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+exclude = ["strops-rs"]
+
+[tool.basedpyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+useLibraryCodeForTypes = true
+reportMissingImports = "error"
+reportMissingTypeStubs = false
+reportOptionalMemberAccess = false
+reportGeneralTypeIssues = "error"
+reportOptionalCall = false
+reportOptionalIterable = false
+reportOptionalContextManager = false
+reportOptionalOperand = false
+reportTypedDictNotRequiredAccess = false
+reportUnnecessaryTypeIgnoreComment = "warning"
+reportUnusedImport = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"

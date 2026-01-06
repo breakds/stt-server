@@ -2,38 +2,33 @@
 #
 # This creates a Python application that runs the STT WebSocket server.
 # The package includes all dependencies and provides the `stt-server` command.
-{ lib
-, python3
-, writeShellApplication
+{ lib,
+  buildPythonPackage,
+  hatchling,
+  numpy,
+  torch,
+  torchaudio,
+  transformers,
+  peft,
+  safetensors,
+  librosa,
+  fastapi,
+  uvicorn,
+  pydantic,
+  loguru,
+  click,
+  websockets,
+  rich,
+  pysilero-vad,
+  strops,
 }:
 
-let
-  pythonEnv = python3.withPackages (ps: with ps; [
-    # Core runtime
-    numpy
-    torch
-    torchaudio
-    transformers
-    peft
-    safetensors
-    librosa
 
-    # Server
-    fastapi
-    uvicorn
-    pydantic
-    websockets
-    loguru
-    click
+buildPythonPackage {
+  pname = "stt-server";
+  version = "0.8.0";
+  pyproject = true;
 
-    # VAD
-    pysilero-vad
-
-    # Custom packages (must be in overlay)
-    strops
-  ]);
-
-  # The source directory containing the Python packages
   src = lib.cleanSourceWith {
     filter = name: type:
       let baseName = baseNameOf name;
@@ -49,23 +44,40 @@ let
         lib.hasSuffix ".pyc" baseName ||
         lib.hasSuffix ".nix" baseName
       );
-    src = lib.cleanSource ../..;
+    src = lib.cleanSource ../../..;
   };
-in
-writeShellApplication {
-  name = "stt-server";
 
-  runtimeInputs = [ pythonEnv ];
+  build-system = [ hatchling ];
 
-  text = ''
-    export PYTHONPATH="${src}:''${PYTHONPATH:-}"
-    exec python -m stt_server.server "$@"
-  '';
+  dependencies = [
+    numpy
+    torch
+    torchaudio
+    transformers
+    peft
+    safetensors
+    librosa
+    fastapi
+    uvicorn
+    pydantic
+    loguru
+    click
+    websockets
+    rich
+    pysilero-vad
+    strops
+  ];
+
+  passthru = {
+    inherit (torch) cudaSupport cudaCapabilities;
+  };
 
   meta = with lib; {
     description = "Real-time Speech-to-Text WebSocket server for conversational agents";
-    homepage = "https://github.com/user/stt-server";
+    homepage = "https://github.com/breakds/stt-server/";
     license = licenses.mit;
     mainProgram = "stt-server";
+    maintainers = with maintainers; [ breakds ];
   };
+
 }
