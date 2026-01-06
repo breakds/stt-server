@@ -1,5 +1,6 @@
 """ASR stage that transcribes audio chunks using Canary-Qwen."""
 
+import re
 from typing import override
 
 import numpy as np
@@ -8,6 +9,24 @@ from strops import merge_by_overlap
 from nemo_lite import CanaryQwen
 from stt_server.data_types import AudioChunk, EndOfTurnSignal, TranscriptionSegment
 from stt_server.pipeline import SingleStage
+
+# Pattern for tokenizing ASR output: words (with contractions) or punctuation
+_TOKEN_PATTERN = re.compile(r"\w+(?:'\w+)?|[^\w\s]+")
+
+
+def tokenize(text: str) -> list[str]:
+    """Tokenize text for ASR overlap detection.
+
+    Splits text into lowercase words and punctuation tokens. This improves
+    overlap detection by ensuring "Hello," and "hello" can match.
+
+    Contractions are kept together (e.g., "don't" stays as one token).
+
+    Examples:
+        "Hello, world!" → ["hello", ",", "world", "!"]
+        "What's up?" → ["what's", "up", "?"]
+    """
+    return _TOKEN_PATTERN.findall(text.lower())
 
 
 class ASRStage(SingleStage[AudioChunk | EndOfTurnSignal, TranscriptionSegment]):
@@ -58,7 +77,7 @@ class ASRStage(SingleStage[AudioChunk | EndOfTurnSignal, TranscriptionSegment]):
 
         # Transcribe the combined audio
         text = self._model.transcribe(combined_audio, sample_rate=chunk.sample_rate)
-        new_words = text.split()
+        new_words = tokenize(text)
 
         # Merge with existing transcript
         if self._transcript_words and new_words:
