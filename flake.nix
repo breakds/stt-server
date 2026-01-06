@@ -24,6 +24,7 @@
 
       imports = [
         ./nix/development.nix
+        ./nix/release.nix
         ./strops-rs/nix/development.nix
       ];
 
