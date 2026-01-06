@@ -1,0 +1,38 @@
+nemo_lite - Lightweight Canary-Qwen Inference Library
+=====================================================
+
+This software is licensed under the MIT License (see LICENSE file).
+
+Third-Party Attributions
+------------------------
+
+### NVIDIA Canary-Qwen-2.5B Model
+
+This library is designed to load and run the NVIDIA Canary-Qwen-2.5B model.
+The model weights are licensed under CC-BY-4.0 by NVIDIA Corporation.
+
+Model: https://huggingface.co/nvidia/canary-qwen-2.5b
+License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+
+By using the Canary-Qwen-2.5B model weights with this library, you agree to
+the terms of the CC-BY-4.0 license, which requires attribution to NVIDIA.
+
+### NVIDIA NeMo Toolkit
+
+The architecture implementation in this library is based on studying the
+NVIDIA NeMo toolkit as a reference. NeMo is licensed under Apache 2.0.
+
+Repository: https://github.com/NVIDIA/NeMo
+License: Apache License 2.0
+
+This library is a clean-room reimplementation and does not contain code
+copied from NeMo. The implementation aims for weight compatibility with
+NeMo's Canary models.
+
+### Qwen3
+
+The language model component uses Qwen3 via HuggingFace Transformers.
+Qwen3 is licensed under Apache 2.0 by Alibaba Cloud.
+
+Repository: https://huggingface.co/Qwen/Qwen3-1.7B-Base
+License: Apache License 2.0
